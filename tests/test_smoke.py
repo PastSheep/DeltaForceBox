@@ -161,6 +161,33 @@ def test_app_icon_loaded(qapp):
     window.close()
 
 
+def test_theme_switch_triggers_title_bar_hook(qapp, monkeypatch, tmp_path):
+    """设置页切换主题应实时触发标题栏配色钩子（防回归）。"""
+    import json
+
+    from deltaforcebox.app import build_app
+    from deltaforcebox.core import windows as win_mod
+
+    # 隔离设置文件，保证启动主题确定（不受真实 data/settings.json 影响）
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"theme": "dark", "language": "zh"}), encoding="utf-8")
+
+    calls = []
+
+    def fake_set(hwnd, dark):
+        calls.append(bool(dark))
+        return True
+
+    monkeypatch.setattr(win_mod, "set_title_bar_dark", fake_set)
+    app, window = build_app(settings_path=settings)
+    window.show()  # showEvent 首次应用当前主题（dark）
+    page = window.pages["settings"]
+    page.theme_combo.setCurrentIndex(page.theme_combo.findData("light"))
+    page.theme_combo.setCurrentIndex(page.theme_combo.findData("dark"))
+    assert calls == [True, False, True], "标题栏应随主题实时切换"
+    window.close()
+
+
 def test_theme_switch_applies_stylesheet(qapp):
     theme = ThemeManager()
     theme.apply()
