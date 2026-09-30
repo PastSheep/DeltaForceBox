@@ -9,23 +9,22 @@ QMainWindow, QWidget#central, QStackedWidget, QWidget#pageRoot {
 }
 
 /* Sidebar */
-QListWidget#sidebar {
+QTreeWidget#sidebar {
     background-color: #ffffff;
     border: none;
     border-right: 1px solid #e0e4ea;
     outline: none;
     padding: 8px 6px;
 }
-QListWidget#sidebar::item {
-    padding: 12px 14px;
+QTreeWidget#sidebar::item {
+    padding: 10px 12px;
     border-radius: 6px;
-    margin: 2px 0;
     color: #4a5568;
 }
-QListWidget#sidebar::item:hover {
+QTreeWidget#sidebar::item:hover {
     background-color: #eef1f6;
 }
-QListWidget#sidebar::item:selected {
+QTreeWidget#sidebar::item:selected {
     background-color: #2d6cdf;
     color: #ffffff;
 }
@@ -99,6 +98,17 @@ QGroupBox::title {
     left: 12px;
     padding: 0 4px;
     color: #4a5568;
+}
+
+/* Splitter handle */
+QSplitter::handle {
+    background-color: #e0e4ea;
+}
+QSplitter::handle:hover {
+    background-color: #2d6cdf;
+}
+QSplitter::handle:horizontal {
+    width: 6px;
 }
 
 QStatusBar { background-color: #ffffff; border-top: 1px solid #e0e4ea; color: #7a8699; }

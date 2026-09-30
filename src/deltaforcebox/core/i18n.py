@@ -1,7 +1,11 @@
-"""轻量国际化：JSON 翻译字典 + 切换信号。
+"""轻量国际化：JSON 翻译字典 + 切换信号（当前仅支持中文）。
 
 翻译文件位于 resources/i18n/{lang}.json，结构为 {key: text}。
 切换语言时发出 changed 信号，各界面据此刷新文本。
+
+当前版本只支持中文（SUPPORTED_LANGUAGES 仅 "zh"），设置页语言行
+仅提供“中文”选项；后续恢复英文支持时：新增 resources/i18n/en.json、
+在 SUPPORTED_LANGUAGES 中追加 "en"、并在设置页语言下拉中增加英文项。
 """
 
 from __future__ import annotations
@@ -12,7 +16,8 @@ from PySide6.QtCore import QObject, Signal
 
 from .paths import I18N_DIR
 
-SUPPORTED_LANGUAGES = ("zh", "en")
+# 仅支持中文；英文支持待后续扩展
+SUPPORTED_LANGUAGES = ("zh",)
 DEFAULT_LANGUAGE = "zh"
 
 

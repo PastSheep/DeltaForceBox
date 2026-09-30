@@ -1,4 +1,4 @@
-"""设置页：语言切换与主题切换。"""
+"""设置页：语言切换（当前仅中文）与主题切换。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
 from ...core.i18n import I18nManager
 from ...core.theme import ThemeManager
 
-LANGUAGE_ITEMS = (("zh", "中文"), ("en", "English"))
+# 语言下拉选项；英文支持后续加入时在此追加 ("en", "English")
+LANGUAGE_ITEMS = (("zh", "中文"),)
 
 
 class SettingsPage(QWidget):
