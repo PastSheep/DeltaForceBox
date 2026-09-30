@@ -1,60 +1,116 @@
 """骇爪美图「图片来源与作者」窗口。
 
-读取 resources/images/puzzle/manifest.json，以表格展示每张图片的
-缩略图、文件名、作者与来源 URL；缩略图用 QImageReader 按需解码
-（缩放 + 居中裁剪为正方形），避免一次性加载 75 张大图。
+以卡片网格展示 manifest.json 中每张图片：缩略图 + 作者 + 来源 URL，
+每张卡片带「打开文件位置」按钮（explorer /select 定位到文件）。
+缩略图来自磁盘缓存（data/thumbnails/），首次生成后秒开。
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QIcon, QImageReader, QPixmap
+import subprocess
+import sys
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
 )
 
 from ...core.i18n import I18nManager
-from .image_source import load_manifest
+from ...core.thumbs import cached_thumbnail
+from .image_source import PuzzleImage, load_manifest
 
-THUMB_SIZE = 56  # 缩略图边长（正方形）
-COL_THUMB, COL_FILE, COL_AUTHOR, COL_URL = 0, 1, 2, 3
+CARD_WIDTH = 190      # 卡片整体宽度
+CARD_HEIGHT = 268     # 卡片整体高度
+THUMB_SIZE = 144      # 缩略图边长（正方形）
+GRID_PADDING = 8      # 卡片间距
 
 
-def _load_thumb(path: str, size: int) -> QIcon:
-    """高效生成正方形缩略图：缩放 + 居中裁剪，不解码原图全尺寸。"""
-    reader = QImageReader(path)
-    reader.setAutoTransform(True)
-    src = reader.size()
-    if src.isEmpty() or src.width() <= 0 or src.height() <= 0:
-        return QIcon()
-    factor = max(size / src.width(), size / src.height())
-    reader.setScaledSize(QSize(round(src.width() * factor), round(src.height() * factor)))
-    side = size / factor
-    x = max(0.0, (src.width() - side) / 2.0)
-    y = max(0.0, (src.height() - side) / 2.0)
-    reader.setScaledClipRect(QRect(round(x), round(y), round(side), round(side)))
-    img = reader.read()
-    if img.isNull():
-        return QIcon()
-    return QIcon(QPixmap.fromImage(img))
+def open_file_location(path: str) -> None:
+    """在文件管理器中定位并选中该文件。"""
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", f"/select,{path}"])
+        else:
+            subprocess.Popen(["xdg-open", str(__import__("pathlib").Path(path).parent)])
+    except OSError:
+        pass
+
+
+def _elided(text: str, width: int, middle: bool = False) -> str:
+    """按宽度省略文本（URL 用中间省略，作者用尾部省略）。"""
+    mode = Qt.TextElideMode.ElideMiddle if middle else Qt.TextElideMode.ElideRight
+    return QFontMetrics(QLabel().font()).elidedText(text, mode, width)
+
+
+class SourceCard(QFrame):
+    """单张图片来源卡片：缩略图 + 作者 + URL + 打开文件位置。"""
+
+    def __init__(
+        self,
+        image: PuzzleImage,
+        i18n: I18nManager,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("sourceCard")
+        self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        self.thumb_label = QLabel()
+        self.thumb_label.setObjectName("sourceThumb")
+        self.thumb_label.setFixedSize(THUMB_SIZE, THUMB_SIZE)
+        self.thumb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.thumb_label.setToolTip(image.path.name)
+        pm = cached_thumbnail(image.path, THUMB_SIZE)
+        if pm is not None:
+            self.thumb_label.setPixmap(pm)
+        else:
+            self.thumb_label.setText("?")
+
+        self.author_label = QLabel()
+        self.author_label.setObjectName("sourceAuthor")
+        author_text = f"{i18n.t('puzzle.sources.author')}：{image.author}"
+        self.author_label.setText(_elided(author_text, CARD_WIDTH - 32))
+        self.author_label.setToolTip(image.author)
+
+        self.url_label = QLabel()
+        self.url_label.setObjectName("sourceUrl")
+        url_text = image.author_url or "—"
+        self.url_label.setText(_elided(url_text, CARD_WIDTH - 32, middle=True))
+        self.url_label.setToolTip(image.author_url or "")
+
+        self.open_btn = QPushButton(i18n.t("puzzle.sources.open"))
+        self.open_btn.setObjectName("ghost")
+        self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.open_btn.clicked.connect(lambda: open_file_location(str(image.path)))
+
+        layout.addWidget(self.thumb_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.author_label)
+        layout.addWidget(self.url_label)
+        layout.addWidget(self.open_btn)
+        layout.addStretch(1)
 
 
 class SourceDialog(QDialog):
-    """展示 manifest.json 中全部图片来源与作者的窗口。"""
+    """卡片网格展示 manifest.json 中全部图片来源与作者。"""
 
     def __init__(self, i18n: I18nManager, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(i18n.t("puzzle.sources.title"))
-        self.setMinimumSize(760, 500)
-        self.resize(880, 560)
+        self.setMinimumSize(680, 480)
+        self.resize(900, 580)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 12)
@@ -75,31 +131,20 @@ class SourceDialog(QDialog):
         header.addWidget(self.count_label)
         root.addLayout(header)
 
-        # 表格：缩略图 / 文件名 / 作者 / 来源
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(
-            [
-                "",
-                i18n.t("puzzle.sources.file"),
-                i18n.t("puzzle.sources.author"),
-                i18n.t("puzzle.sources.url"),
-            ]
+        # 卡片网格：IconMode 列表自适应列数换行
+        self.list = QListWidget()
+        self.list.setObjectName("sourceList")
+        self.list.setViewMode(QListWidget.ViewMode.IconMode)
+        self.list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.list.setMovement(QListWidget.Movement.Static)
+        self.list.setFlow(QListWidget.Flow.LeftToRight)
+        self.list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.list.setUniformItemSizes(True)
+        self.list.setSpacing(GRID_PADDING)
+        self.list.setGridSize(
+            QSize(CARD_WIDTH + GRID_PADDING, CARD_HEIGHT + GRID_PADDING)
         )
-        self.table.verticalHeader().hide()
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.setShowGrid(False)
-        self.table.setSortingEnabled(True)
-        header_view = self.table.horizontalHeader()
-        header_view.setSectionResizeMode(COL_THUMB, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(COL_THUMB, THUMB_SIZE + 12)
-        header_view.setSectionResizeMode(COL_FILE, QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setSectionResizeMode(COL_AUTHOR, QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setSectionResizeMode(COL_URL, QHeaderView.ResizeMode.Stretch)
-        header_view.setSectionsClickable(True)
-        root.addWidget(self.table, 1)
+        root.addWidget(self.list, 1)
 
         # 底部：关闭按钮
         bottom = QHBoxLayout()
@@ -123,23 +168,11 @@ class SourceDialog(QDialog):
         if app is not None:
             app.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            self.table.setSortingEnabled(False)  # 填充期间关闭排序避免行错位
-            self.table.setRowCount(len(images))
-            for row, image in enumerate(images):
-                thumb_item = QTableWidgetItem()
-                thumb_item.setIcon(_load_thumb(str(image.path), THUMB_SIZE))
-                thumb_item.setToolTip(image.path.name)
-                thumb_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                file_item = QTableWidgetItem(image.path.name)
-                file_item.setToolTip(str(image.path))
-                author_item = QTableWidgetItem(image.author)
-                url_item = QTableWidgetItem(image.author_url or "")
-                url_item.setToolTip(image.author_url or "")
-                for col, item in enumerate(
-                    (thumb_item, file_item, author_item, url_item)
-                ):
-                    self.table.setItem(row, col, item)
-            self.table.setSortingEnabled(True)
+            for image in images:
+                item = QListWidgetItem()
+                item.setSizeHint(QSize(CARD_WIDTH, CARD_HEIGHT))
+                self.list.addItem(item)
+                self.list.setItemWidget(item, SourceCard(image, i18n))
         finally:
             if app is not None:
                 app.restoreOverrideCursor()

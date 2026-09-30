@@ -125,6 +125,32 @@ QHeaderView::section {
     font-weight: 600;
 }
 
+/* Source cards */
+QListWidget#sourceList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QFrame#sourceCard {
+    background-color: #ffffff;
+    border: 1px solid #e0e4ea;
+    border-radius: 10px;
+}
+QFrame#sourceCard:hover {
+    border-color: #2d6cdf;
+}
+QLabel#sourceThumb {
+    background-color: #eef1f6;
+    border-radius: 6px;
+}
+QLabel#sourceAuthor {
+    color: #2c3e50;
+    font-weight: 600;
+}
+QLabel#sourceUrl {
+    color: #7a8699;
+}
+
 /* Splitter handle */
 QSplitter::handle {
     background-color: #e0e4ea;
