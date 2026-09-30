@@ -22,7 +22,7 @@ def test_language_switch_refreshes_texts(qapp):
     i18n.set_language("en")
     assert window.windowTitle() == "Delta Force Box"
     assert window.sidebar.item(0).text() == "Home"
-    assert window.sidebar.item(1).text() == "Puzzle"
+    assert window.sidebar.item(1).text() == "CPC Puzzle Pieces"
     assert window.sidebar.item(2).text() == "Settings"
     i18n.set_language("zh")
     assert window.windowTitle() == "三角洲行动工具箱"
