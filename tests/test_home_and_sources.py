@@ -195,3 +195,60 @@ def test_puzzle_timer_and_best_record(qapp, tmp_path, monkeypatch):
     assert page.timer_label.text() == rec.format_time(0.0)
     assert not page._timer.isActive()
     window.close()
+
+
+def test_changelog_parses_latest_section(tmp_path):
+    """版本日志解析：取顶部最新版本节，忽略历史版本。"""
+    from deltaforcebox.core import changelog
+
+    doc = tmp_path / "版本日志.md"
+    doc.write_text(
+        """# 版本日志
+
+## Beta-2.0（2026-10-02）
+
+**当前版本**：测试简介。
+
+### 新功能
+
+- 功能 A
+- 功能 B
+
+---
+
+## Beta-1.0（2026-10-01）
+
+### 旧功能
+
+- 旧功能 X
+""",
+        encoding="utf-8",
+    )
+    update = changelog.load_latest_update(doc)
+    assert update["version"] == "Beta-2.0"
+    assert update["intro"] == "当前版本：测试简介。"
+    assert update["sections"] == [
+        {"title": "新功能", "items": ["功能 A", "功能 B"]}
+    ]
+
+
+def test_changelog_missing_file_returns_none(tmp_path):
+    from deltaforcebox.core import changelog
+
+    assert changelog.load_latest_update(tmp_path / "不存在.md") is None
+
+
+def test_home_shows_version_and_latest_update(qapp):
+    """首页版本行带冒号，且显示最近一次版本更新内容。"""
+    from deltaforcebox import __version__
+
+    window = MainWindow(I18nManager(), ThemeManager())
+    home = window.pages["home"]
+    assert home.version_label.text() == f"版本：{__version__}"
+    window.show()
+    qapp.processEvents()
+    assert home.update_title_label.isVisible()
+    assert home.update_body_label.isVisible()
+    assert home.update_body_label.text() != ""
+    assert __version__ in home.update_title_label.text()
+    window.close()
