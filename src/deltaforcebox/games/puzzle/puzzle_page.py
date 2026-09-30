@@ -31,6 +31,7 @@ from .image_source import (
 )
 from .path_builder import build_piece_path
 from .piece_item import SNAP_THRESHOLD, PieceItem
+from .source_dialog import SourceDialog
 
 # 与网页端一致的参数
 TARGET_CELL = 18.0  # 桌面端单块目标尺寸
@@ -103,11 +104,15 @@ class PuzzlePage(QWidget):
         title_font.setPointSize(16)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
+        self.sources_btn = QPushButton()
+        self.sources_btn.setObjectName("puzzleSources")
+        self.sources_btn.clicked.connect(self._open_sources)
         self.restart_btn = QPushButton()
         self.restart_btn.setObjectName("puzzleRestart")
         self.restart_btn.clicked.connect(self.start_new)
         controls.addWidget(self.title_label)
         controls.addStretch(1)
+        controls.addWidget(self.sources_btn)
         controls.addWidget(self.restart_btn)
 
         self.view = PuzzleView(self._scene)
@@ -127,7 +132,15 @@ class PuzzlePage(QWidget):
 
     def retranslate(self) -> None:
         self.title_label.setText(self._i18n.t("puzzle.title"))
+        self.sources_btn.setText(self._i18n.t("puzzle.sources"))
         self.restart_btn.setText(self._i18n.t("puzzle.restart"))
+
+    # ── 图片来源窗口 ───────────────────────────────────────
+
+    def _open_sources(self) -> None:
+        """弹出图片来源与作者窗口（模态，关闭后回到拼图页）。"""
+        dialog = SourceDialog(self._i18n, self)
+        dialog.exec()
 
     # ── 开局 ──────────────────────────────────────────────
 

@@ -100,6 +100,31 @@ QGroupBox::title {
     color: #a8b0bb;
 }
 
+/* Table */
+QTableWidget {
+    background-color: #232730;
+    alternate-background-color: #1f232b;
+    border: 1px solid #303540;
+    border-radius: 8px;
+    color: #d7dce3;
+}
+QTableWidget::item {
+    padding: 4px 8px;
+}
+QTableWidget::item:selected {
+    background-color: #2d6cdf;
+    color: #ffffff;
+}
+QHeaderView::section {
+    background-color: #2a2f3a;
+    color: #a8b0bb;
+    border: none;
+    border-right: 1px solid #303540;
+    border-bottom: 1px solid #303540;
+    padding: 6px 10px;
+    font-weight: 600;
+}
+
 /* Splitter handle */
 QSplitter::handle {
     background-color: #303540;

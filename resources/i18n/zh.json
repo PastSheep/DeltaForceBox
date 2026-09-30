@@ -1,13 +1,15 @@
 {
-  "app.title": "三角洲行动工具箱",
+  "app.title": "鼠鼠大王工具箱",
   "sidebar.home": "首页",
-  "sidebar.games": "小游戏",
+  "sidebar.games": "牢区小游戏",
   "sidebar.puzzle": "骇爪美图",
   "sidebar.settings": "设置",
 
-  "home.welcome": "欢迎使用三角洲行动工具箱",
+  "home.welcome": "欢迎使用鼠鼠大王工具箱",
   "home.description": "为三角洲玩家提供各种便捷功能，侧边栏切换功能页面。",
   "home.version": "版本",
+  "home.author": "作者",
+  "home.email": "联系邮箱",
 
   "settings.title": "设置",
   "settings.language": "语言",
@@ -17,6 +19,13 @@
 
   "puzzle.title": "骇爪美图",
   "puzzle.restart": "重新开始",
+  "puzzle.sources": "图片来源",
+  "puzzle.sources.title": "图片来源与作者",
+  "puzzle.sources.file": "文件名",
+  "puzzle.sources.author": "作者",
+  "puzzle.sources.url": "来源",
+  "puzzle.sources.count": "共 %1 张图片",
 
-  "common.ok": "确定"
+  "common.ok": "确定",
+  "common.close": "关闭"
 }

@@ -204,9 +204,31 @@ class MainWindow(QMainWindow):
         if key in self.pages:
             self.stack.setCurrentWidget(self.pages[key])
 
+    def _find_item_by_key(self, key: str) -> QTreeWidgetItem | None:
+        """按页面标识查找侧栏条目（含分组内子项）。"""
+        for i in range(self.sidebar.topLevelItemCount()):
+            item = self.sidebar.topLevelItem(i)
+            if item.data(0, Qt.ItemDataRole.UserRole) == key:
+                return item
+            for j in range(item.childCount()):
+                child = item.child(j)
+                if child.data(0, Qt.ItemDataRole.UserRole) == key:
+                    return child
+        return None
+
     def retranslate(self) -> None:
         self.setWindowTitle(self._i18n.t("app.title"))
         self.app_title_label.setText(self._i18n.t("app.title"))
+        # 记住当前选中的叶子项，重建后恢复高亮（clear() 会清空选中状态）
+        current = self.sidebar.currentItem()
+        current_key = (
+            current.data(0, Qt.ItemDataRole.UserRole)
+            if current is not None and current.childCount() == 0
+            else "home"
+        )
         self._populate_sidebar()
+        item = self._find_item_by_key(current_key) or self._find_item_by_key("home")
+        if item is not None:
+            self.sidebar.setCurrentItem(item)
         for page in self.pages.values():
             page.retranslate()

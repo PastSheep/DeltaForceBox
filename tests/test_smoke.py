@@ -13,9 +13,18 @@ def test_main_window_builds(qapp):
     i18n = I18nManager()
     theme = ThemeManager()
     window = MainWindow(i18n, theme)
-    assert window.windowTitle() == "三角洲行动工具箱"
+    assert window.windowTitle() == i18n.t("app.title")
     assert window.sidebar.topLevelItemCount() == 3
     assert window.stack.count() == 3
+
+
+def test_startup_home_selected_and_highlighted(qapp):
+    """启动后默认显示首页，且侧栏「首页」项高亮选中。"""
+    window = MainWindow(I18nManager(), ThemeManager())
+    current = window.sidebar.currentItem()
+    assert current is window.sidebar.topLevelItem(0)
+    assert current.isSelected()
+    assert window.stack.currentWidget() is window.pages["home"]
 
 
 def test_sidebar_structure_with_group(qapp):
@@ -24,12 +33,12 @@ def test_sidebar_structure_with_group(qapp):
     window = MainWindow(i18n, ThemeManager())
     sidebar = window.sidebar
 
-    assert sidebar.topLevelItem(0).text(0) == "首页"
+    assert sidebar.topLevelItem(0).text(0) == i18n.t("sidebar.home")
     group = sidebar.topLevelItem(1)
-    assert group.text(0) == "小游戏"
+    assert group.text(0) == i18n.t("sidebar.games")
     assert group.childCount() == 1
-    assert group.child(0).text(0) == "骇爪美图"
-    assert sidebar.topLevelItem(2).text(0) == "设置"
+    assert group.child(0).text(0) == i18n.t("sidebar.puzzle")
+    assert sidebar.topLevelItem(2).text(0) == i18n.t("sidebar.settings")
 
     # 分组默认展开，且分组项不可选中
     assert group.isExpanded()
@@ -65,19 +74,22 @@ def test_leaf_click_switches_page(qapp):
 
 
 def test_i18n_chinese_only(qapp):
-    """当前仅支持中文：查词返回中文文案，语言标识为 zh，切换英文无效。"""
+    """当前仅支持中文：查词与 zh.json 完全一致，切英文无效。"""
+    import json
+
+    from deltaforcebox.core.paths import I18N_DIR
+
     i18n = I18nManager()
     assert i18n.language() == "zh"
-    assert i18n.t("sidebar.home") == "首页"
-    assert i18n.t("sidebar.games") == "小游戏"
-    assert i18n.t("sidebar.puzzle") == "骇爪美图"
-    assert i18n.t("settings.theme.dark") == "深色"
+    expected = json.loads((I18N_DIR / "zh.json").read_text(encoding="utf-8"))
+    for key, value in expected.items():
+        assert i18n.t(key) == value, f"key {key} 文案与资源文件不一致"
     # 未知 key 原样返回，避免静默吞错
     assert i18n.t("no.such.key") == "no.such.key"
     # 仅支持 zh：尝试切英文为无效操作，语言与文案不变
     i18n.set_language("en")
     assert i18n.language() == "zh"
-    assert i18n.t("sidebar.home") == "首页"
+    assert i18n.t("sidebar.home") == expected["sidebar.home"]
 
 
 def test_settings_keeps_language_row_chinese_only(qapp):
@@ -88,7 +100,7 @@ def test_settings_keeps_language_row_chinese_only(qapp):
     i18n = I18nManager()
     window = MainWindow(i18n, ThemeManager())
     page = window.pages["settings"]
-    assert page.lang_label.text() == "语言"
+    assert page.lang_label.text() == i18n.t("settings.language")
     assert page.lang_combo.count() == 1
     assert page.lang_combo.itemData(0) == "zh"
     assert page.lang_combo.currentText() == "中文"
