@@ -81,6 +81,10 @@ class PieceItem(QGraphicsObject):
 
     def boundingRect(self) -> QRectF:
         rect = self._path.boundingRect()
+        # 阴影绘制在 path 平移 _shadow_offset(1,3) 的位置，必须并入重绘范围；
+        # 否则移动碎片时，超出本区域的阴影不会被擦除，形成拖影。
+        rect = rect.united(rect.translated(self._shadow_offset))
+        # 描边与抗锯齿余量
         rect = rect.adjusted(-2.0, -2.0, 2.0, 2.0)
         if self._clip_path is not None:
             rect = rect.united(self._clip_path.boundingRect())
