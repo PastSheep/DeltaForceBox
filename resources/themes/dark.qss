@@ -1,0 +1,104 @@
+/* Delta Force Box - Dark theme */
+* {
+    font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+}
+
+QMainWindow, QWidget#central, QStackedWidget, QWidget#pageRoot {
+    background-color: #1c1f26;
+    color: #d7dce3;
+}
+
+/* Sidebar */
+QListWidget#sidebar {
+    background-color: #232730;
+    border: none;
+    border-right: 1px solid #303540;
+    outline: none;
+    padding: 8px 6px;
+}
+QListWidget#sidebar::item {
+    padding: 12px 14px;
+    border-radius: 6px;
+    margin: 2px 0;
+    color: #a8b0bb;
+}
+QListWidget#sidebar::item:hover {
+    background-color: #2e3340;
+}
+QListWidget#sidebar::item:selected {
+    background-color: #2d6cdf;
+    color: #ffffff;
+}
+
+QLabel#appTitle {
+    font-size: 15px;
+    font-weight: 600;
+    padding: 10px 14px;
+    color: #d7dce3;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #2d6cdf;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+}
+QPushButton:hover { background-color: #3a7aee; }
+QPushButton:pressed { background-color: #275cc0; }
+QPushButton:disabled { background-color: #3a3f4a; color: #6a7280; }
+QPushButton#ghost {
+    background-color: #2a2f3a;
+    color: #d7dce3;
+    border: 1px solid #3a3f4a;
+}
+QPushButton#ghost:hover { background-color: #333947; }
+
+/* Combo */
+QComboBox {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #d7dce3;
+}
+QComboBox QAbstractItemView {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    selection-background-color: #2d6cdf;
+    selection-color: #ffffff;
+}
+
+/* Labels */
+QLabel { color: #d7dce3; }
+QLabel#hint { color: #7d8794; }
+QLabel#timer {
+    font-size: 18px;
+    font-weight: 700;
+    color: #5b9cff;
+}
+
+/* Graphics view */
+QGraphicsView {
+    background-color: #15171c;
+    border: 1px solid #303540;
+    border-radius: 8px;
+}
+
+/* Group boxes */
+QGroupBox {
+    border: 1px solid #303540;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 8px;
+    background-color: #232730;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 4px;
+    color: #a8b0bb;
+}
+
+QStatusBar { background-color: #232730; border-top: 1px solid #303540; color: #7d8794; }

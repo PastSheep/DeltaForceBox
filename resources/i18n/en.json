@@ -1,0 +1,18 @@
+{
+  "app.title": "Delta Force Box",
+  "app.title.short": "Toolbox",
+  "sidebar.home": "Home",
+  "sidebar.settings": "Settings",
+
+  "home.welcome": "Welcome to Delta Force Box",
+  "home.description": "Convenient tools for Delta Force players. Switch pages from the sidebar.",
+  "home.version": "Version",
+
+  "settings.title": "Settings",
+  "settings.language": "Language",
+  "settings.theme": "Theme",
+  "settings.theme.light": "Light",
+  "settings.theme.dark": "Dark",
+
+  "common.ok": "OK"
+}

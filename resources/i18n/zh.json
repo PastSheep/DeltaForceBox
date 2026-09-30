@@ -1,0 +1,18 @@
+{
+  "app.title": "三角洲行动工具箱",
+  "app.title.short": "工具箱",
+  "sidebar.home": "首页",
+  "sidebar.settings": "设置",
+
+  "home.welcome": "欢迎使用三角洲行动工具箱",
+  "home.description": "为三角洲玩家提供各种便捷功能，侧边栏切换功能页面。",
+  "home.version": "版本",
+
+  "settings.title": "设置",
+  "settings.language": "语言",
+  "settings.theme": "主题",
+  "settings.theme.light": "浅色",
+  "settings.theme.dark": "深色",
+
+  "common.ok": "确定"
+}
