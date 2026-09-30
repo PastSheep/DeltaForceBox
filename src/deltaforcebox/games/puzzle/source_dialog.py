@@ -1,7 +1,7 @@
 """骇爪美图「图片来源与作者」窗口。
 
 以卡片网格展示 manifest.json 中每张图片：缩略图 + 作者 + 来源 URL，
-每张卡片带「打开文件位置」按钮（explorer /select 定位到文件）。
+底部「打开文件位置」按钮直接打开图片所在文件夹（所有图在同一目录）。
 缩略图来自磁盘缓存（data/thumbnails/），首次生成后秒开。
 """
 
@@ -52,7 +52,7 @@ def _elided(text: str, width: int, middle: bool = False) -> str:
 
 
 class SourceCard(QFrame):
-    """单张图片来源卡片：缩略图 + 作者 + URL + 打开文件位置。"""
+    """单张图片来源卡片：缩略图 + 作者 + URL。"""
 
     def __init__(
         self,
@@ -155,6 +155,13 @@ class SourceDialog(QDialog):
         root.addLayout(bottom)
 
         self._populate(i18n)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # 对话框标题栏配色跟随应用主题
+        from ...core.windows import apply_title_bar_theme
+
+        apply_title_bar_theme(self)
 
     def _populate(self, i18n: I18nManager) -> None:
         try:

@@ -119,6 +119,32 @@ def test_window_native_title_stays_blank(qapp):
     window.close()
 
 
+def test_title_bar_theme_follows_app_theme(qapp):
+    """标题栏配色应跟随应用主题；无原生窗口/非 Windows 时优雅降级。"""
+    import sys
+
+    from deltaforcebox.app import build_app
+    from deltaforcebox.core.theme import ThemeManager, current_theme
+    from deltaforcebox.core.windows import set_title_bar_dark
+
+    # 主题应用后 current_theme() 可查询
+    tm = ThemeManager("dark")
+    tm.apply()
+    assert current_theme() == "dark"
+    tm.set_theme("light")
+    assert current_theme() == "light"
+
+    # 无真实窗口句柄时不抛异常，返回 bool（offscreen 下 DWM 调用失败静默）
+    result = set_title_bar_dark(0xDEADBEEF if sys.platform == "win32" else 1, True)
+    assert isinstance(result, bool)
+
+    # 主窗口显示/主题切换路径不崩溃
+    app, window = build_app()
+    window.show()
+    window._apply_title_bar_theme()
+    window.close()
+
+
 def test_theme_switch_applies_stylesheet(qapp):
     theme = ThemeManager()
     theme.apply()

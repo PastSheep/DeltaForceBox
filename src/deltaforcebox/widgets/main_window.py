@@ -140,10 +140,21 @@ class MainWindow(QMainWindow):
 
         i18n.changed.connect(lambda _: self.retranslate())
         theme.changed.connect(self._refresh_group_style)
+        theme.changed.connect(lambda _: self._apply_title_bar_theme())
         # 不显示系统标题栏文本（保留最小化/关闭按钮，品牌名见侧栏顶部）
         self.setWindowTitle("")
         self.retranslate()
         self.resize(980, 680)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # 原生窗口创建后才可设置标题栏配色（跟随应用主题）
+        self._apply_title_bar_theme()
+
+    def _apply_title_bar_theme(self) -> None:
+        from ..core.windows import apply_title_bar_theme
+
+        apply_title_bar_theme(self)
     # ── 侧边栏构建 ─────────────────────────────────────────
 
     def _populate_sidebar(self) -> None:
