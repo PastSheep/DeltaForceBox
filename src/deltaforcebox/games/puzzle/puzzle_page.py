@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from ...core.i18n import I18nManager
 from ...core.theme import ThemeManager
-from .grid import compute_grid_dynamic, create_knobs
+from .grid import compute_grid_dynamic, create_knob_styles, create_knobs
 from .image_source import (
     PuzzleImage,
     make_grid_texture,
@@ -158,12 +158,14 @@ class PuzzlePage(QWidget):
 
             self._draw_board(grid_w, grid_h)
             h_knobs, v_knobs = create_knobs(rows, cols)
+            h_styles, v_styles = create_knob_styles(rows, cols)
             knob_r = min(cell_w, cell_h) * KNOB_RADIUS_FACTOR
 
             for r in range(rows):
                 for c in range(cols):
                     path = build_piece_path(
-                        r, c, cell_w, cell_h, rows, cols, h_knobs, v_knobs
+                        r, c, cell_w, cell_h, rows, cols,
+                        h_knobs, v_knobs, h_styles, v_styles,
                     )
                     brush = texture_brush(texture, c, r, cell_w, cell_h, unit_scale)
                     origin = QPointF(c * cell_w, r * cell_h)

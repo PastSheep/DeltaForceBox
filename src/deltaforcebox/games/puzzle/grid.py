@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import random
 
-__all__ = ["compute_grid_dynamic", "create_knobs"]
+__all__ = ["compute_grid_dynamic", "create_knobs", "create_knob_styles"]
 
 
 def compute_grid_dynamic(
@@ -49,3 +49,22 @@ def create_knobs(rows: int, cols: int) -> tuple[list[list[int]], list[list[int]]
         for _ in range(rows)
     ]
     return h_knobs, v_knobs
+
+
+def create_knob_styles(rows: int, cols: int) -> tuple[list[list[int]], list[list[int]]]:
+    """随机生成凸凹样式矩阵，返回 (h_styles, v_styles)。
+
+    形状与 create_knobs 的 h_knobs/v_knobs 一一对应：
+    - 0：半圆凸凹（网页版原始形状：圆滑顶点 + 根部 cusp 尖角）；
+    - 1：尖角凸凹（弧镜像翻转后：根部平滑、顶点 ~179° 超锐利尖角）。
+    相邻两块共享同一条边且样式一致，保证咬合匹配。
+    """
+    h_styles = [
+        [1 if random.random() > 0.5 else 0 for _ in range(cols)]
+        for _ in range(rows - 1)
+    ]
+    v_styles = [
+        [1 if random.random() > 0.5 else 0 for _ in range(cols - 1)]
+        for _ in range(rows)
+    ]
+    return h_styles, v_styles
