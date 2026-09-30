@@ -49,6 +49,18 @@ def test_source_dialog_background_follows_theme(qapp):
     )
 
 
+def test_themes_style_scrollbar(qapp):
+    """明暗主题均须包含滚动条规则（曾缺失而用系统默认亮色滚动条）。"""
+    from deltaforcebox.core.paths import THEMES_DIR
+
+    for name in ("dark", "light"):
+        qss = (THEMES_DIR / f"{name}.qss").read_text(encoding="utf-8")
+        assert "QScrollBar:vertical" in qss
+        assert "QScrollBar:horizontal" in qss
+        assert "QScrollBar::handle" in qss, f"{name} 主题缺少滚动条滑块规则"
+        assert "QScrollBar::add-page" in qss
+
+
 def test_source_dialog_lists_manifest_as_cards(qapp):
     i18n = I18nManager()
     dialog = SourceDialog(i18n)
