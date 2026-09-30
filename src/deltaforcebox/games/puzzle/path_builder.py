@@ -17,8 +17,11 @@ __all__ = ["build_piece_path", "KNOB_RADIUS_FACTOR", "KNOB_MAX_FACTOR"]
 KNOB_RADIUS_FACTOR = 0.18  # 凸凹半径 = min(cell_w, cell_h) * 0.18
 KNOB_MAX_FACTOR = 0.35  # 半径上限 = 边长 * 0.35
 
-# 四分之一圆弧的三次贝塞尔拟合系数：4/3 * tan(pi/8)
-_KAPPA = 0.5522847498307936
+# 圆弧采样步长：2°/段。不用三次贝塞尔，因为 QPainter 对贝塞尔路径的
+# 内部细分阈值约 0.25 逻辑单位——半径 3.6 单位的半圆只会被切分成
+# 4~5 段（约 45°/段），经视图放大后轮廓呈明显的折角梯形；改为逐点
+# lineTo 折线后 Qt 不再做二次细分，任何放大级别下视觉都与圆弧一致。
+_ARC_STEP_DEG = 2.0
 
 
 def _arc_fit(
@@ -31,10 +34,10 @@ def _arc_fit(
     cx: float,
     cy: float,
 ) -> None:
-    """用三次贝塞尔拟合圆心 (cx,cy)、半径 r、从 (x1,y1) 到 (x2,y2) 的短弧。
+    """按 2° 步长采样圆心 (cx,cy)、半径 r、从 (x1,y1) 到 (x2,y2) 的圆弧。
 
-    不依赖 Qt arcTo 的角度方向约定：起止点由 atan2 确定，弧按角度中点
-    分成两段 90° 贝塞尔，几何完全可控（与网页端 SVG 圆弧视觉一致）。
+    起止点由 atan2 确定，走短弧方向；每步一个 lineTo 采样点，
+    高密度折线在任意缩放级别下视觉等于平滑圆弧（与网页端 SVG 一致）。
     """
     a1 = math.atan2(y1 - cy, x1 - cx)
     a2 = math.atan2(y2 - cy, x2 - cx)
@@ -43,38 +46,11 @@ def _arc_fit(
         span += 2.0 * math.pi
     while span > math.pi:
         span -= 2.0 * math.pi
-    sign = 1.0 if span >= 0 else -1.0
 
-    def tangent(a: float) -> tuple[float, float]:
-        # 沿弧前进方向的单位切线：逆时针 (-sin, cos)，顺时针取反
-        return sign * (-math.sin(a)), sign * (math.cos(a))
-
-    am = a1 + span / 2.0
-    xm = cx + r * math.cos(am)
-    ym = cy + r * math.sin(am)
-
-    tx1, ty1 = tangent(a1)
-    txm, tym = tangent(am)
-    tx2, ty2 = tangent(a2)
-
-    # 第一段 (x1,y1) -> (xm,ym)
-    path.cubicTo(
-        x1 + _KAPPA * r * tx1,
-        y1 + _KAPPA * r * ty1,
-        xm - _KAPPA * r * txm,
-        ym - _KAPPA * r * tym,
-        xm,
-        ym,
-    )
-    # 第二段 (xm,ym) -> (x2,y2)
-    path.cubicTo(
-        xm + _KAPPA * r * txm,
-        ym + _KAPPA * r * tym,
-        x2 - _KAPPA * r * tx2,
-        y2 - _KAPPA * r * ty2,
-        x2,
-        y2,
-    )
+    n = max(2, int(math.ceil(abs(span) / math.radians(_ARC_STEP_DEG))))
+    for i in range(1, n + 1):
+        a = a1 + span * (i / n)
+        path.lineTo(cx + r * math.cos(a), cy + r * math.sin(a))
 
 
 def _edge_top(

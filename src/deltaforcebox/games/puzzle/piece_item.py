@@ -65,7 +65,9 @@ class PieceItem(QGraphicsObject):
             if self._clip_path is not None:
                 self._clip_path.translate(-origin.x(), -origin.y())
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
-        self.setCacheMode(QGraphicsObject.DeviceCoordinateCache)
+        # 不使用 DeviceCoordinateCache：缓存会在 item 局部小坐标系下栅格化贝塞尔
+        # 曲线，被 view 放大后轮廓出现折角（多边形感）；直接渲染让 QPainter
+        # 按设备精度 flatten 曲线，保证与网页端一致的平滑圆弧。
         self.setTransformOriginPoint(self._path.boundingRect().center())
 
     # ── 几何 ──────────────────────────────────────────────
