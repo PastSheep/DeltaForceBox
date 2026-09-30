@@ -41,25 +41,22 @@ def test_source_dialog_lists_manifest_as_cards(qapp):
     card = card_by_file[first.path.name]
     assert first.author in card.author_label.text()
     assert card.url_label.toolTip() == (first.author_url or "")
-    assert card.open_btn.text() == i18n.t("puzzle.sources.open")
     dialog.accept()
 
 
-def test_card_open_location_button(qapp, monkeypatch):
-    """点击「打开文件位置」应定位到该图片文件。"""
+def test_dialog_open_location_button(qapp, monkeypatch):
+    """底部「打开文件位置」按钮应打开图片统一所在文件夹。"""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
     from deltaforcebox.games.puzzle import source_dialog
+    from deltaforcebox.games.puzzle.image_source import PUZZLE_IMAGES_DIR
 
     calls = []
-    monkeypatch.setattr(source_dialog, "open_file_location", calls.append)
+    monkeypatch.setattr(source_dialog, "open_in_explorer", calls.append)
 
     i18n = I18nManager()
     dialog = SourceDialog(i18n)
-    first = load_manifest()[0]
-    card = dialog.list.itemWidget(dialog.list.item(0))
-    # 找到对应第一张图的卡片（排序未启用，插入序即清单序）
-    QTest.mouseClick(card.open_btn, Qt.MouseButton.LeftButton)
-    assert calls == [str(first.path)]
+    QTest.mouseClick(dialog.open_btn, Qt.MouseButton.LeftButton)
+    assert calls == [str(PUZZLE_IMAGES_DIR)]
     dialog.accept()

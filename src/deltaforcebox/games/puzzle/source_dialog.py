@@ -26,16 +26,16 @@ from PySide6.QtWidgets import (
 
 from ...core.i18n import I18nManager
 from ...core.thumbs import cached_thumbnail
-from .image_source import PuzzleImage, load_manifest
+from .image_source import PUZZLE_IMAGES_DIR, PuzzleImage, load_manifest
 
 CARD_WIDTH = 190      # 卡片整体宽度
-CARD_HEIGHT = 268     # 卡片整体高度
+CARD_HEIGHT = 230     # 卡片整体高度
 THUMB_SIZE = 144      # 缩略图边长（正方形）
 GRID_PADDING = 8      # 卡片间距
 
 
-def open_file_location(path: str) -> None:
-    """在文件管理器中定位并选中该文件。"""
+def open_in_explorer(path: str) -> None:
+    """在文件管理器中打开指定路径（文件则定位选中，目录则打开）。"""
     try:
         if sys.platform == "win32":
             subprocess.Popen(["explorer", f"/select,{path}"])
@@ -91,15 +91,9 @@ class SourceCard(QFrame):
         self.url_label.setText(_elided(url_text, CARD_WIDTH - 32, middle=True))
         self.url_label.setToolTip(image.author_url or "")
 
-        self.open_btn = QPushButton(i18n.t("puzzle.sources.open"))
-        self.open_btn.setObjectName("ghost")
-        self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_btn.clicked.connect(lambda: open_file_location(str(image.path)))
-
         layout.addWidget(self.thumb_label, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self.author_label)
         layout.addWidget(self.url_label)
-        layout.addWidget(self.open_btn)
         layout.addStretch(1)
 
 
@@ -146,11 +140,17 @@ class SourceDialog(QDialog):
         )
         root.addWidget(self.list, 1)
 
-        # 底部：关闭按钮
+        # 底部：打开文件位置（图片统一在同一个文件夹）+ 关闭
         bottom = QHBoxLayout()
         bottom.addStretch(1)
+        self.open_btn = QPushButton(i18n.t("puzzle.sources.open"))
+        self.open_btn.setObjectName("ghost")
+        self.open_btn.clicked.connect(
+            lambda: open_in_explorer(str(PUZZLE_IMAGES_DIR))
+        )
         close_btn = QPushButton(i18n.t("common.close"))
         close_btn.clicked.connect(self.accept)
+        bottom.addWidget(self.open_btn)
         bottom.addWidget(close_btn)
         root.addLayout(bottom)
 
