@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import html
 import subprocess
 import sys
 
@@ -87,9 +88,19 @@ class SourceCard(QFrame):
 
         self.url_label = QLabel()
         self.url_label.setObjectName("sourceUrl")
-        url_text = image.author_url or "—"
-        self.url_label.setText(_elided(url_text, CARD_WIDTH - 32, middle=True))
-        self.url_label.setToolTip(image.author_url or "")
+        url_text = image.author_url or ""
+        if url_text:
+            # 富文本链接：点击用默认浏览器打开
+            self.url_label.setTextFormat(Qt.TextFormat.RichText)
+            self.url_label.setOpenExternalLinks(True)
+            display = _elided(url_text, CARD_WIDTH - 32, middle=True)
+            self.url_label.setText(
+                f'<a href="{html.escape(url_text)}" style="color:#4d8ff7;text-decoration:none;">'
+                f"{html.escape(display)}</a>"
+            )
+            self.url_label.setToolTip(url_text)
+        else:
+            self.url_label.setText("—")
 
         layout.addWidget(self.thumb_label, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self.author_label)

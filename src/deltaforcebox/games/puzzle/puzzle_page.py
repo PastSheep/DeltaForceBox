@@ -138,9 +138,21 @@ class PuzzlePage(QWidget):
     # ── 图片来源窗口 ───────────────────────────────────────
 
     def _open_sources(self) -> None:
-        """弹出图片来源与作者窗口（模态，关闭后回到拼图页）。"""
+        """弹出图片来源与作者窗口（非模态，不阻塞主窗口；重复点击复用实例）。"""
+        dialog = getattr(self, "_sources_dialog", None)
+        if dialog is not None and dialog.isVisible():
+            dialog.raise_()
+            dialog.activateWindow()
+            return
         dialog = SourceDialog(self._i18n, self)
-        dialog.exec()
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.finished.connect(lambda: self._on_sources_closed(dialog))
+        self._sources_dialog = dialog
+        dialog.show()
+
+    def _on_sources_closed(self, dialog: SourceDialog) -> None:
+        if getattr(self, "_sources_dialog", None) is dialog:
+            self._sources_dialog = None
 
     # ── 开局 ──────────────────────────────────────────────
 

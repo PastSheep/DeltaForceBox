@@ -62,6 +62,16 @@ QComboBox {
     padding: 6px 12px;
     color: #d7dce3;
 }
+/* 去掉下拉箭头：保留右侧点击区域，视觉更简洁 */
+QComboBox::drop-down {
+    border: none;
+    width: 18px;
+}
+QComboBox::down-arrow {
+    image: none;
+    width: 0;
+    height: 0;
+}
 QComboBox QAbstractItemView {
     background-color: #2a2f3a;
     border: 1px solid #3a3f4a;

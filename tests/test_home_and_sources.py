@@ -81,7 +81,31 @@ def test_source_dialog_lists_manifest_as_cards(qapp):
     card = card_by_file[first.path.name]
     assert first.author in card.author_label.text()
     assert card.url_label.toolTip() == (first.author_url or "")
+    if first.author_url:
+        # URL 应为可点击的富文本链接（点击在浏览器打开）
+        assert card.url_label.openExternalLinks()
+        assert f'href="{first.author_url}"' in card.url_label.text()
+        assert "<a href=" in card.url_label.text()
     dialog.accept()
+
+
+def test_sources_dialog_non_modal_and_reused(qapp):
+    """图片来源窗口应为非模态，且重复点击复用同一实例。"""
+    window = MainWindow(I18nManager(), ThemeManager())
+    page = window.pages["puzzle"]
+
+    page._open_sources()
+    dialog = page._sources_dialog
+    assert dialog is not None
+    assert dialog.isVisible()
+    assert not dialog.isModal(), "来源窗口不应阻塞主窗口"
+
+    page._open_sources()  # 再次点击：复用实例，不新建
+    assert page._sources_dialog is dialog
+
+    dialog.close()
+    assert page._sources_dialog is None
+    window.close()
 
 
 def test_dialog_open_location_button(qapp, monkeypatch):
