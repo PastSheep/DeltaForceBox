@@ -2,6 +2,7 @@
   "app.title": "Delta Force Box",
   "app.title.short": "Toolbox",
   "sidebar.home": "Home",
+  "sidebar.puzzle": "Puzzle",
   "sidebar.settings": "Settings",
 
   "home.welcome": "Welcome to Delta Force Box",
@@ -13,6 +14,9 @@
   "settings.theme": "Theme",
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
+
+  "puzzle.title": "Puzzle Gallery",
+  "puzzle.restart": "Restart",
 
   "common.ok": "OK"
 }

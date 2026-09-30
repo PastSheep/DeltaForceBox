@@ -2,6 +2,7 @@
   "app.title": "三角洲行动工具箱",
   "app.title.short": "工具箱",
   "sidebar.home": "首页",
+  "sidebar.puzzle": "拼图",
   "sidebar.settings": "设置",
 
   "home.welcome": "欢迎使用三角洲行动工具箱",
@@ -13,6 +14,9 @@
   "settings.theme": "主题",
   "settings.theme.light": "浅色",
   "settings.theme.dark": "深色",
+
+  "puzzle.title": "骇爪美图",
+  "puzzle.restart": "重新开始",
 
   "common.ok": "确定"
 }

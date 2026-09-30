@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
 
 from ..core.i18n import I18nManager
 from ..core.theme import ThemeManager
+from ..games.puzzle.puzzle_page import PuzzlePage
 from .pages.home_page import HomePage
 from .pages.settings_page import SettingsPage
 
 # 侧边栏条目：(页面标识, i18n key)
 SIDEBAR_ITEMS = (
     ("home", "sidebar.home"),
+    ("puzzle", "sidebar.puzzle"),
     ("settings", "sidebar.settings"),
 )
 
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.pages = {
             "home": HomePage(i18n),
+            "puzzle": PuzzlePage(i18n, theme),
             "settings": SettingsPage(i18n, theme),
         }
         for key, page in self.pages.items():
