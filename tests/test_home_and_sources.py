@@ -21,6 +21,34 @@ def test_home_page_shows_author_info(qapp):
     assert "mailto:" in email_label.text()
 
 
+def test_source_dialog_background_follows_theme(qapp):
+    """来源窗口背景应跟随主题（曾缺 QDialog 基础规则而始终亮色）。"""
+    from PySide6.QtGui import QImage
+
+    from deltaforcebox.core.i18n import I18nManager
+    from deltaforcebox.core.theme import ThemeManager
+    from deltaforcebox.games.puzzle.source_dialog import SourceDialog
+
+    def corner_rgb(theme_name: str):
+        theme = ThemeManager(theme_name)
+        theme.apply()
+        dialog = SourceDialog(I18nManager())
+        dialog.resize(900, 580)
+        image = dialog.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
+        color = image.pixelColor(8, 8)  # 边距空白区即对话框背景
+        dialog.accept()
+        return color.red(), color.green(), color.blue()
+
+    dark_rgb = corner_rgb("dark")
+    assert all(abs(ch - ref) <= 3 for ch, ref in zip(dark_rgb, (0x1C, 0x1F, 0x26))), (
+        f"暗色背景不符: {dark_rgb}"
+    )
+    light_rgb = corner_rgb("light")
+    assert all(abs(ch - ref) <= 3 for ch, ref in zip(light_rgb, (0xF5, 0xF6, 0xFA))), (
+        f"浅色背景不符: {light_rgb}"
+    )
+
+
 def test_source_dialog_lists_manifest_as_cards(qapp):
     i18n = I18nManager()
     dialog = SourceDialog(i18n)

@@ -3,7 +3,7 @@
     font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
 }
 
-QMainWindow, QWidget#central, QStackedWidget, QWidget#pageRoot {
+QMainWindow, QWidget#central, QStackedWidget, QWidget#pageRoot, QDialog {
     background-color: #1c1f26;
     color: #d7dce3;
 }
