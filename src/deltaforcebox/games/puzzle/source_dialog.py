@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 import html
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QFontMetrics
@@ -37,12 +39,22 @@ GRID_PADDING = 8      # 卡片间距
 
 
 def open_in_explorer(path: str) -> None:
-    """在文件管理器中打开指定路径（文件则定位选中，目录则打开）。"""
+    """在文件管理器中打开指定路径（文件则定位选中，目录则打开）。
+
+    Windows 注意：explorer 的 /select, 参数若与路径合并为一个参数，
+    含空格的安装路径（如 "C:\\Program Files\\..."）会被错误解析，
+    导致打开"文档"等错误文件夹。目录直接 os.startfile 打开；
+    文件用分参数形式 /select, + path（实测对含空格路径可靠）。
+    """
     try:
+        p = Path(path)
         if sys.platform == "win32":
-            subprocess.Popen(["explorer", f"/select,{path}"])
+            if p.is_dir():
+                os.startfile(str(p))
+            else:
+                subprocess.Popen(["explorer", "/select,", str(p)])
         else:
-            subprocess.Popen(["xdg-open", str(__import__("pathlib").Path(path).parent)])
+            subprocess.Popen(["xdg-open", str(p.parent)])
     except OSError:
         pass
 

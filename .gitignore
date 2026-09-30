@@ -41,3 +41,13 @@ tmp/
 # 数据文件（保留目录，内容不入库）
 data/*
 !data/.gitkeep
+
+# 打包与安装程序制作（不入源码库，本地保留供重新打包）
+DeltaForceBox.spec
+docs/打包方案.md
+scripts/build_dist.ps1
+scripts/build_installer.ps1
+scripts/installer.iss
+scripts/launcher.py
+scripts/verify_dist.py
+scripts/version_info.txt
