@@ -54,7 +54,7 @@ DeltaForceBox/
 │   ├── app.py                  # 应用装配
 │   └── main.py                 # 程序入口
 ├── tests/                      # 单元测试与 GUI 冒烟测试
-├── config/ docs/ scripts/ data/
+├── docs/ scripts/ data/        # 文档 / 工具脚本 / 运行时数据（data/ 不入库）
 ├── pyproject.toml
 └── README.md
 ```
