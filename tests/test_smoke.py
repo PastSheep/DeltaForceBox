@@ -13,7 +13,9 @@ def test_main_window_builds(qapp):
     i18n = I18nManager()
     theme = ThemeManager()
     window = MainWindow(i18n, theme)
-    assert window.windowTitle() == i18n.t("app.title")
+    # 系统标题栏文本隐藏，品牌名在侧栏顶部展示
+    assert window.windowTitle() == ""
+    assert window.app_title_label.text() == i18n.t("app.title")
     assert window.sidebar.topLevelItemCount() == 3
     assert window.stack.count() == 3
 
@@ -104,6 +106,17 @@ def test_settings_keeps_language_row_chinese_only(qapp):
     assert page.lang_combo.count() == 1
     assert page.lang_combo.itemData(0) == "zh"
     assert page.lang_combo.currentText() == "中文"
+
+
+def test_window_native_title_stays_blank(qapp):
+    """防回归：Windows 标题栏在窗口标题为空时会回退显示应用显示名，
+    因此 applicationDisplayName 必须为空，原生标题栏才会真正无文字。"""
+    from deltaforcebox.app import build_app
+
+    app, window = build_app()
+    assert app.applicationDisplayName() == ""
+    assert window.windowTitle() == ""
+    window.close()
 
 
 def test_theme_switch_applies_stylesheet(qapp):

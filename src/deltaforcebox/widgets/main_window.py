@@ -140,6 +140,8 @@ class MainWindow(QMainWindow):
 
         i18n.changed.connect(lambda _: self.retranslate())
         theme.changed.connect(self._refresh_group_style)
+        # 不显示系统标题栏文本（保留最小化/关闭按钮，品牌名见侧栏顶部）
+        self.setWindowTitle("")
         self.retranslate()
         self.resize(980, 680)
     # ── 侧边栏构建 ─────────────────────────────────────────
@@ -217,7 +219,7 @@ class MainWindow(QMainWindow):
         return None
 
     def retranslate(self) -> None:
-        self.setWindowTitle(self._i18n.t("app.title"))
+        # 系统标题栏文本保持隐藏，不随语言/文案变化
         self.app_title_label.setText(self._i18n.t("app.title"))
         # 记住当前选中的叶子项，重建后恢复高亮（clear() 会清空选中状态）
         current = self.sidebar.currentItem()

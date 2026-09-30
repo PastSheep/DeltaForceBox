@@ -23,7 +23,9 @@ def build_app(
     """
     app = QApplication.instance() or QApplication(argv or [])
     app.setApplicationName("Delta Force Box")
-    app.setApplicationDisplayName("Delta Force Box")
+    # 显示名置空：避免 Windows 在窗口标题为空时回退显示应用名，
+    # 使原生标题栏真正无文字（任务栏标签随之显示应用名以外内容）
+    app.setApplicationDisplayName("")
 
     settings = load_settings(settings_path)
     i18n = I18nManager(language=settings.get("language", DEFAULT_LANGUAGE))
