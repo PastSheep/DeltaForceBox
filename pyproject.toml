@@ -19,6 +19,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    # scripts/make_icon.py 生成 .ico 应用图标使用
+    "pillow>=10.0",
 ]
 
 [tool.setuptools.packages.find]

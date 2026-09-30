@@ -145,6 +145,22 @@ def test_title_bar_theme_follows_app_theme(qapp):
     window.close()
 
 
+def test_app_icon_loaded(qapp):
+    """应用图标应设置为 resources/icons/app.ico 且可渲染。"""
+    from PySide6.QtCore import QSize
+
+    from deltaforcebox.app import APP_ICON, build_app
+
+    assert APP_ICON.exists()
+    app, window = build_app()
+    icon = app.windowIcon()
+    assert not icon.isNull()
+    for size in (16, 32, 64, 256):
+        assert not icon.pixmap(QSize(size, size)).isNull(), f"缺 {size}px 图标"
+    assert window.windowIcon().cacheKey() == icon.cacheKey() or not window.windowIcon().isNull()
+    window.close()
+
+
 def test_theme_switch_applies_stylesheet(qapp):
     theme = ThemeManager()
     theme.apply()
