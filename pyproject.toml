@@ -9,7 +9,7 @@ description = "DeltaForceBox 项目"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    { name = "WangZhuoyang" },
+    { name = "PastSheep" },
 ]
 dependencies = [
     "PySide6>=6.7",
