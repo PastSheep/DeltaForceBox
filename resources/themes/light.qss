@@ -160,6 +160,10 @@ QLabel#sourceAuthor {
 QLabel#sourceUrl {
     color: #7a8699;
 }
+QLabel#sourceBest {
+    color: #2d6cdf;
+    font-weight: 600;
+}
 
 /* Scrollbar */
 QScrollBar:vertical {

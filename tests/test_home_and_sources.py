@@ -124,3 +124,74 @@ def test_dialog_open_location_button(qapp, monkeypatch):
     QTest.mouseClick(dialog.open_btn, Qt.MouseButton.LeftButton)
     assert calls == [str(PUZZLE_IMAGES_DIR)]
     dialog.accept()
+
+
+def test_source_card_best_time_row(qapp, monkeypatch):
+    """卡片最下方显示本图最快完成用时（无记录时显示 —）。"""
+    from deltaforcebox.games.puzzle import source_dialog as sd
+
+    i18n = I18nManager()
+    first = load_manifest()[0]
+    prefix = i18n.t("puzzle.sources.best")
+
+    # 无记录：显示占位
+    monkeypatch.setattr(sd, "load_best_times", lambda: {})
+    dialog = SourceDialog(i18n)
+    card = next(
+        dialog.list.itemWidget(dialog.list.item(i))
+        for i in range(dialog.list.count())
+        if dialog.list.itemWidget(dialog.list.item(i)).thumb_label.toolTip()
+        == first.path.name
+    )
+    assert card.best_label.text() == f"{prefix}：—"
+    dialog.accept()
+
+    # 有记录：显示格式化后的最快用时
+    monkeypatch.setattr(sd, "load_best_times", lambda: {first.path.name: 65.5})
+    dialog = SourceDialog(i18n)
+    card = next(
+        dialog.list.itemWidget(dialog.list.item(i))
+        for i in range(dialog.list.count())
+        if dialog.list.itemWidget(dialog.list.item(i)).thumb_label.toolTip()
+        == first.path.name
+    )
+    assert card.best_label.text() == f"{prefix}：1:05.5"
+    dialog.accept()
+
+
+def test_puzzle_timer_and_best_record(qapp, tmp_path, monkeypatch):
+    """第一次拿起碎片开始计时，完成停止并持久化本图最快用时。"""
+    from PySide6.QtTest import QTest
+
+    from deltaforcebox.core import records as rec
+    from deltaforcebox.games.puzzle.piece_item import PieceItem
+
+    monkeypatch.setattr(rec, "best_times_path", lambda *a: tmp_path / "best_times.json")
+    window = MainWindow(I18nManager(), ThemeManager())
+    page = window.pages["puzzle"]
+
+    assert page.timer_label.text() == rec.format_time(0.0)
+    assert not page._timer.isActive()
+
+    # 第一次拿起碎片 → 开始计时
+    piece: PieceItem = page._pieces[0]
+    page._on_piece_picked(piece)
+    assert page._elapsed.isValid()
+    assert page._timer.isActive()
+
+    QTest.qWait(250)  # 等计时器刷新显示
+    assert page.timer_label.text() != rec.format_time(0.0)
+
+    # 完成 → 停止计时并记录最快用时
+    page._on_game_completed()
+    assert not page._timer.isActive()
+    assert page._current_image is not None
+    saved = rec.load_best_times()
+    assert page._current_image.path.name in saved
+    assert saved[page._current_image.path.name] > 0.0
+
+    # 重新开局 → 计时重置
+    page.start_new()
+    assert page.timer_label.text() == rec.format_time(0.0)
+    assert not page._timer.isActive()
+    window.close()

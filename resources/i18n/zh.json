@@ -26,6 +26,7 @@
   "puzzle.sources.url": "来源",
   "puzzle.sources.count": "共 %1 张图片",
   "puzzle.sources.open": "打开文件位置",
+  "puzzle.sources.best": "最快用时",
 
   "common.ok": "确定",
   "common.close": "关闭"

@@ -7,7 +7,14 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import QEasingCurve, QPointF, QRectF, Qt
+from PySide6.QtCore import (
+    QEasingCurve,
+    QElapsedTimer,
+    QPointF,
+    QRectF,
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -21,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n import I18nManager
+from ...core.records import format_time, save_best_time
 from ...core.theme import ThemeManager
 from .grid import compute_grid_dynamic, create_knob_styles, create_knobs
 from .image_source import (
@@ -110,8 +118,12 @@ class PuzzlePage(QWidget):
         self.restart_btn = QPushButton()
         self.restart_btn.setObjectName("puzzleRestart")
         self.restart_btn.clicked.connect(self.start_new)
+        self.timer_label = QLabel()
+        self.timer_label.setObjectName("timer")
+        self.timer_label.setText(format_time(0.0))
         controls.addWidget(self.title_label)
         controls.addStretch(1)
+        controls.addWidget(self.timer_label)
         controls.addWidget(self.sources_btn)
         controls.addWidget(self.restart_btn)
 
@@ -125,6 +137,10 @@ class PuzzlePage(QWidget):
         root.addWidget(self.author_label)
 
         theme.changed.connect(self._update_board_color)
+        self._elapsed = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setInterval(100)  # 0.1s 刷新显示
+        self._timer.timeout.connect(self._update_timer_label)
         self.retranslate()
         self.start_new()
 
@@ -163,6 +179,10 @@ class PuzzlePage(QWidget):
         self._end_item = None
         self.author_label.setText("")
         self.author_label.hide()
+        # 重置计时器：重新开局后从第一次拿起碎片重新计时
+        self._timer.stop()
+        self._elapsed.invalidate()
+        self.timer_label.setText(format_time(0.0))
 
         try:
             image = pick_random_image()
@@ -197,6 +217,7 @@ class PuzzlePage(QWidget):
                     target = origin
                     piece = PieceItem(path, brush, target, origin=origin)
                     piece.released.connect(self._on_piece_released)
+                    piece.picked.connect(self._on_piece_picked)
                     self._scene.addItem(piece)
                     self._pieces.append(piece)
                     self._scatter_piece(piece, c, r, cell_w, cell_h, knob_r, grid_w, grid_h)
@@ -262,6 +283,28 @@ class PuzzlePage(QWidget):
         piece.setScale(1.0)
         piece.setZValue(2)  # 自由层
 
+    # ── 计时器 ────────────────────────────────────────────
+
+    def _on_piece_picked(self, _piece: PieceItem) -> None:
+        """第一次拿起碎片时开始计时（后续拿起不再重置）。"""
+        if not self._elapsed.isValid():
+            self._elapsed.start()
+            self._timer.start()
+
+    def _update_timer_label(self) -> None:
+        self.timer_label.setText(format_time(self._elapsed.elapsed() / 1000.0))
+
+    def _on_game_completed(self) -> None:
+        """完成：停止计时并持久化本图最快用时。"""
+        if not self._elapsed.isValid():
+            return
+        self._timer.stop()
+        total = self._elapsed.elapsed() / 1000.0
+        self._elapsed.invalidate()
+        self.timer_label.setText(format_time(total))
+        if self._current_image is not None:
+            save_best_time(self._current_image.path.name, total)
+
     # ── 交互与完成判定 ────────────────────────────────────
 
     def _on_piece_released(self, piece: PieceItem) -> None:
@@ -291,7 +334,8 @@ class PuzzlePage(QWidget):
             self._show_complete()
 
     def _show_complete(self) -> None:
-        """完成：完整原图 0.8s 淡入 + 底部作者署名。"""
+        """完成：记录用时并持久化，完整原图 0.8s 淡入 + 底部作者署名。"""
+        self._on_game_completed()
         if self._texture is None:
             return
         end = QGraphicsPixmapItem(self._texture)

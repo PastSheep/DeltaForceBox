@@ -26,11 +26,12 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n import I18nManager
+from ...core.records import format_time, load_best_times
 from ...core.thumbs import cached_thumbnail
 from .image_source import PUZZLE_IMAGES_DIR, PuzzleImage, load_manifest
 
 CARD_WIDTH = 190      # 卡片整体宽度
-CARD_HEIGHT = 230     # 卡片整体高度
+CARD_HEIGHT = 254     # 卡片整体高度
 THUMB_SIZE = 144      # 缩略图边长（正方形）
 GRID_PADDING = 8      # 卡片间距
 
@@ -59,6 +60,7 @@ class SourceCard(QFrame):
         self,
         image: PuzzleImage,
         i18n: I18nManager,
+        best: float | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -102,9 +104,19 @@ class SourceCard(QFrame):
         else:
             self.url_label.setText("—")
 
+        self.best_label = QLabel()
+        self.best_label.setObjectName("sourceBest")
+        best_text = (
+            f"{i18n.t('puzzle.sources.best')}：{format_time(best)}"
+            if best is not None
+            else f"{i18n.t('puzzle.sources.best')}：—"
+        )
+        self.best_label.setText(_elided(best_text, CARD_WIDTH - 32))
+
         layout.addWidget(self.thumb_label, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self.author_label)
         layout.addWidget(self.url_label)
+        layout.addWidget(self.best_label)
         layout.addStretch(1)
 
 
@@ -182,6 +194,7 @@ class SourceDialog(QDialog):
             return
 
         self.count_label.setText(i18n.t("puzzle.sources.count", len(images)))
+        best_times = load_best_times()
         app = QApplication.instance()
         if app is not None:
             app.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -190,7 +203,10 @@ class SourceDialog(QDialog):
                 item = QListWidgetItem()
                 item.setSizeHint(QSize(CARD_WIDTH, CARD_HEIGHT))
                 self.list.addItem(item)
-                self.list.setItemWidget(item, SourceCard(image, i18n))
+                self.list.setItemWidget(
+                    item,
+                    SourceCard(image, i18n, best=best_times.get(image.path.name)),
+                )
         finally:
             if app is not None:
                 app.restoreOverrideCursor()

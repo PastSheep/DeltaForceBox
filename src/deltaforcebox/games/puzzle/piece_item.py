@@ -37,6 +37,7 @@ class PieceItem(QGraphicsObject):
     """
 
     released = Signal(object)  # 释放后通知页面（携带自身，用于完成判定）
+    picked = Signal(object)  # 拿起碎片时通知页面（携带自身，用于开始计时）
 
     def __init__(
         self,
@@ -135,6 +136,7 @@ class PieceItem(QGraphicsObject):
         self._dragging = True
         self.setZValue(3)  # 拖拽中置于最顶层
         self._play_press_animation()
+        self.picked.emit(self)
         event.accept()
 
     def mouseMoveEvent(self, event) -> None:
