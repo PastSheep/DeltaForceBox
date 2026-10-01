@@ -9,11 +9,12 @@ from PySide6.QtWidgets import QApplication
 
 from .core.i18n import DEFAULT_LANGUAGE, I18nManager
 from .core.paths import RESOURCES_DIR
-from .core.settings import load_settings, save_settings
+from .core.settings import DEFAULT_SETTINGS, load_settings, save_settings
 from .core.theme import DEFAULT_THEME, ThemeManager
 from .widgets.main_window import MainWindow
 
 APP_ICON = RESOURCES_DIR / "icons" / "app.ico"
+DEFAULT_PUZZLE_PIECES = int(DEFAULT_SETTINGS["puzzle_pieces"])
 
 
 def build_app(
@@ -40,13 +41,16 @@ def build_app(
     theme.apply()
 
     def _persist(_value: str | None = None) -> None:
-        save_settings(
-            {"theme": theme.theme(), "language": i18n.language()},
-            settings_path,
-        )
+        # 先读回现有设置再更新：保留用户在配置文件中手改的字段
+        #（如拼图碎片数 puzzle_pieces），避免主题/语言变更时被覆盖丢失
+        values = load_settings(settings_path)
+        values["theme"] = theme.theme()
+        values["language"] = i18n.language()
+        save_settings(values, settings_path)
 
     theme.changed.connect(_persist)
     i18n.changed.connect(_persist)
 
-    window = MainWindow(i18n, theme)
+    puzzle_pieces = settings.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES)
+    window = MainWindow(i18n, theme, puzzle_pieces=puzzle_pieces)
     return app, window

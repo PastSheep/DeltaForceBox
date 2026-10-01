@@ -80,16 +80,38 @@ class PuzzleView(QGraphicsView):
         self.fit_board()
 
 
+# 拼图碎片数配置边界（data/settings.json 的 puzzle_pieces，不在设置界面显示）
+PUZZLE_PIECES_DEFAULT = 48
+PUZZLE_PIECES_MIN = 4
+PUZZLE_PIECES_MAX = 200
+
+
+def _normalize_piece_count(value: object) -> int:
+    """配置文件值归一化：非法/越界回退到边界，字符串转 int 失败用默认。"""
+    try:
+        v = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        v = PUZZLE_PIECES_DEFAULT
+    return max(PUZZLE_PIECES_MIN, min(PUZZLE_PIECES_MAX, v))
+
+
 class PuzzlePage(QWidget):
     """侧边栏“拼图”页：单人拼图，体感对齐网页端。"""
 
     def __init__(
-        self, i18n: I18nManager, theme: ThemeManager, parent: QWidget | None = None
+        self,
+        i18n: I18nManager,
+        theme: ThemeManager,
+        puzzle_pieces: int | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("pageRoot")
         self._i18n = i18n
         self._theme = theme
+        self._target_pieces = _normalize_piece_count(
+            PUZZLE_PIECES_DEFAULT if puzzle_pieces is None else puzzle_pieces
+        )
 
         self._scene = QGraphicsScene(self)
         self._pieces: list[PieceItem] = []
@@ -198,7 +220,9 @@ class PuzzlePage(QWidget):
             # 与网页端一致：先归一化到高=100 的 viewBox 比例，再计算网格
             h_base = 100.0
             w_base = (img_w / img_h) * h_base
-            rows, cols, cell_w, cell_h = compute_grid_dynamic(w_base, h_base)
+            rows, cols, cell_w, cell_h = compute_grid_dynamic(
+                w_base, h_base, target_pieces=self._target_pieces
+            )
             grid_w = cols * cell_w
             grid_h = rows * cell_h
             self._board_rect = QRectF(0, 0, grid_w, grid_h)

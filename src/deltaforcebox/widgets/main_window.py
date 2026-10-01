@@ -73,10 +73,16 @@ def _chevron_icon(expanded: bool) -> QIcon:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, i18n: I18nManager, theme: ThemeManager) -> None:
+    def __init__(
+        self,
+        i18n: I18nManager,
+        theme: ThemeManager,
+        puzzle_pieces: int = 48,
+    ) -> None:
         super().__init__()
         self._i18n = i18n
         self._theme = theme
+        self._puzzle_pieces = puzzle_pieces
 
         central = QWidget()
         central.setObjectName("central")
@@ -106,7 +112,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.pages = {
             "home": HomePage(i18n),
-            "puzzle": PuzzlePage(i18n, theme),
+            "puzzle": PuzzlePage(i18n, theme, puzzle_pieces=self._puzzle_pieces),
             "settings": SettingsPage(i18n, theme),
         }
         for key, page in self.pages.items():

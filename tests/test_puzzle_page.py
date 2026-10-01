@@ -108,6 +108,27 @@ def test_picking_snapped_piece_prevents_complete(page):
     assert page._end_item is None
 
 
+def test_custom_piece_count(app):
+    """配置文件指定的碎片数生效：16 块目标 → 碎片数明显低于默认 48 且不小于 4。"""
+    page = PuzzlePage(I18nManager(), ThemeManager(), puzzle_pieces=16)
+    n = len(page._pieces)
+    assert n >= 4
+    assert abs(n - 16) <= 12  # floor 取整容差（与网格测试同口径）
+    assert n < 48
+
+
+def test_piece_count_normalization(app):
+    """非法/越界配置值回退：0→4、超大→200、非数字→默认 48。"""
+    from deltaforcebox.games.puzzle.puzzle_page import _normalize_piece_count
+
+    assert _normalize_piece_count(0) == 4
+    assert _normalize_piece_count(99999) == 200
+    assert _normalize_piece_count("abc") == 48
+    assert _normalize_piece_count(None) == 48
+    assert _normalize_piece_count(60) == 60
+    assert _normalize_piece_count("16") == 16
+
+
 def test_restart_rebuilds(page):
     """重新开始后碎片重建且都在场景中。"""
     page.start_new()
