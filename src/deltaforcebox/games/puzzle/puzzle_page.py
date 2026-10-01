@@ -93,6 +93,7 @@ class PuzzlePage(QWidget):
 
         self._scene = QGraphicsScene(self)
         self._pieces: list[PieceItem] = []
+        self._snapped: set[PieceItem] = set()  # 已吸附归位的碎片集合（增量判定的唯一事实源）
         self._board_rect = QRectF()
         self._board_item = None
         self._end_item: QGraphicsPixmapItem | None = None
@@ -175,6 +176,7 @@ class PuzzlePage(QWidget):
         """随机选图并开局（与网页端 init() 一致）。"""
         self._scene.clear()
         self._pieces = []
+        self._snapped.clear()
         self._end_item = None
         self.author_label.setText("")
         self.author_label.hide()
@@ -284,11 +286,13 @@ class PuzzlePage(QWidget):
 
     # ── 计时器 ────────────────────────────────────────────
 
-    def _on_piece_picked(self, _piece: PieceItem) -> None:
-        """第一次拿起碎片时开始计时（后续拿起不再重置）。"""
+    def _on_piece_picked(self, piece: PieceItem) -> None:
+        """第一次拿起碎片时开始计时；拿起已吸附块时解除吸附计数。"""
         if not self._elapsed.isValid():
             self._elapsed.start()
             self._timer.start()
+        # 拿起已吸附归位的碎片 → 移出集合（增量判定 O(1)）
+        self._snapped.discard(piece)
 
     def _update_timer_label(self) -> None:
         self.timer_label.setText(format_time(self._elapsed.elapsed() / 1000.0))
@@ -307,21 +311,24 @@ class PuzzlePage(QWidget):
     # ── 交互与完成判定 ────────────────────────────────────
 
     def _on_piece_released(self, piece: PieceItem) -> None:
-        """释放后判定吸附与完成（对齐网页 onRelease + checkSolved）。"""
+        """释放后判定吸附；完成判定推迟到吸附动画结束后（O(1) 增量维护）。"""
         dx = piece.pos().x() - piece.target_pos().x()
         dy = piece.pos().y() - piece.target_pos().y()
         if abs(dx) < SNAP_THRESHOLD and abs(dy) < SNAP_THRESHOLD:
             anim = piece.snap_to_target()
             anim.start()
             piece.setZValue(1)  # 已放置层（圆角呈现）
+            self._snapped.add(piece)  # 集合幂等，无计数漂移
             anim.finished.connect(lambda p=piece: self._after_snap(p))
         else:
             piece.setZValue(2)
-        self._check_solved()
 
     def _after_snap(self, piece: PieceItem) -> None:
+        """吸附动画结束（碎片已归位）后才做最终判定，避免动画中途弹完成图。"""
         piece.setRotation(0.0)
-        self._check_solved()
+        # 增量判定：仅当所有碎片都已吸附（集合大小 O(1) 比较）时全量确认一次
+        if len(self._snapped) == len(self._pieces) and self._end_item is None:
+            self._check_solved()
 
     def _check_solved(self) -> None:
         """全部碎片偏移总和 < 1 即完成（对齐网页端）。"""
