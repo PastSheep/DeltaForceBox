@@ -65,6 +65,25 @@ def test_grid_small_area_respects_min_cell():
     assert rows * cols >= 4
 
 
+def test_adaptive_sampling_segment_count():
+    """自适应采样段数：随缩放单调不减，每段弧 clamp 在 [4,120] 点。"""
+    random.seed(5)
+    rows, cols, cell = 6, 8, 100.0
+    h_knobs, v_knobs = create_knobs(rows, cols)
+    # 中间块 (1,2)：四边均有凸凹 → 8 段 90° 弧
+    min_p = build_piece_path(1, 2, cell, cell, rows, cols, h_knobs, v_knobs, scale=0.001, dpr=1.0)
+    low = build_piece_path(1, 2, cell, cell, rows, cols, h_knobs, v_knobs, scale=0.5, dpr=1.0)
+    mid = build_piece_path(1, 2, cell, cell, rows, cols, h_knobs, v_knobs, scale=1.0, dpr=1.0)
+    high = build_piece_path(1, 2, cell, cell, rows, cols, h_knobs, v_knobs, scale=2.0, dpr=2.0)
+    max_p = build_piece_path(1, 2, cell, cell, rows, cols, h_knobs, v_knobs, scale=1000.0, dpr=4.0)
+    # 单调：缩放越大点数越多（低缩放少点、高缩放密点）
+    assert min_p.elementCount() <= low.elementCount() <= mid.elementCount() \
+        <= high.elementCount() <= max_p.elementCount()
+    # 每边 1 moveTo/lineTo 边界 + 2 段弧 + 终点 lineTo + close → 元素 = 10 + 8n
+    assert 8 * 4 + 4 <= min_p.elementCount() <= 8 * 4 + 20
+    assert 8 * 120 + 4 <= max_p.elementCount() <= 8 * 120 + 20
+
+
 def test_knobs_shape():
     rows, cols = 5, 7
     h_knobs, v_knobs = create_knobs(rows, cols)

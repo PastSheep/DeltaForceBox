@@ -62,9 +62,12 @@ class PieceItem(QGraphicsObject):
         # path 局部坐标起点为 (c*cell, r*cell)，平移到 (0,0)，
         # 使 item 的 pos 直接对应场景中的碎片位置（否则偏移会叠加导致碎片漂移）
         if origin is not None:
+            self._origin = QPointF(origin)
             self._path.translate(-origin.x(), -origin.y())
             if self._clip_path is not None:
                 self._clip_path.translate(-origin.x(), -origin.y())
+        else:
+            self._origin = None
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         # 不使用 DeviceCoordinateCache：缓存会在 item 局部小坐标系下栅格化贝塞尔
         # 曲线，被 view 放大后轮廓出现折角（多边形感）；直接渲染让 QPainter
@@ -75,6 +78,15 @@ class PieceItem(QGraphicsObject):
 
     def target_pos(self) -> QPointF:
         return self._target_pos
+
+    def set_path(self, path: QPainterPath) -> None:
+        """替换碎片路径（自适应采样重建用）：保持局部坐标平移约定不变。"""
+        if self._origin is not None:
+            path.translate(-self._origin.x(), -self._origin.y())
+        self.prepareGeometryChange()
+        self._path = path
+        self.setTransformOriginPoint(self._path.boundingRect().center())
+        self.update()
 
     def offset(self) -> QPointF:
         """当前相对目标位置的偏移（对应网页端 readPieceOffset 的 x/y）。"""

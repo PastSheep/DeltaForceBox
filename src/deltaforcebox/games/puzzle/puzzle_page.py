@@ -99,6 +99,8 @@ class PuzzlePage(QWidget):
         self._end_item: QGraphicsPixmapItem | None = None
         self._texture: QPixmap | None = None
         self._current_image: PuzzleImage | None = None
+        self._grid_ctx: tuple | None = None  # 网格上下文（自适应采样重建路径用）
+        self._did_initial_rebuild = False  # 首显一次性重建防重标志
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 12)
@@ -177,6 +179,11 @@ class PuzzlePage(QWidget):
         self._scene.clear()
         self._pieces = []
         self._snapped.clear()
+        self._grid_ctx = None
+        # 重启时 view 已布局：fit_board 后 m11 即真实缩放，路径按真实尺寸采样，
+        # 置位跳过未来的首显重建；__init__ 首次调用时 view 未显示（flag 保持
+        # False），由 showEvent 在首次显示后按真实 viewport 一次性重建。
+        self._did_initial_rebuild = True if self.view.isVisible() else False
         self._end_item = None
         self.author_label.setText("")
         self.author_label.hide()
@@ -196,6 +203,11 @@ class PuzzlePage(QWidget):
             grid_h = rows * cell_h
             self._board_rect = QRectF(0, 0, grid_w, grid_h)
             self._scene.setSceneRect(self._board_rect)
+            # 先 fit_board 再取真实缩放：自适应采样按当前 view 缩放与设备像素比
+            # 决定圆弧折线密度（__init__ 时 view 未布局，此处为默认值，首显重建修正）
+            self.view.fit_board()
+            scale = self.view.transform().m11()
+            dpr = self.view.devicePixelRatioF()
 
             texture, unit_scale = make_grid_texture(image, grid_w, grid_h)
             self._texture = texture
@@ -206,12 +218,14 @@ class PuzzlePage(QWidget):
             h_knobs, v_knobs = create_knobs(rows, cols)
             h_styles, v_styles = create_knob_styles(rows, cols)
             knob_r = min(cell_w, cell_h) * KNOB_RADIUS_FACTOR
+            self._grid_ctx = (rows, cols, cell_w, cell_h, h_knobs, v_knobs, h_styles, v_styles)
 
             for r in range(rows):
                 for c in range(cols):
                     path = build_piece_path(
                         r, c, cell_w, cell_h, rows, cols,
                         h_knobs, v_knobs, h_styles, v_styles,
+                        scale=scale, dpr=dpr,
                     )
                     brush = texture_brush(texture, c, r, cell_w, cell_h, unit_scale)
                     origin = QPointF(c * cell_w, r * cell_h)
@@ -223,10 +237,35 @@ class PuzzlePage(QWidget):
                     self._pieces.append(piece)
                     self._scatter_piece(piece, c, r, cell_w, cell_h, knob_r, grid_w, grid_h)
 
-            self.view.fit_board()
         except (FileNotFoundError, OSError) as exc:
             self.author_label.setText(f"加载失败：{exc}")
             self.author_label.show()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # 首次显示后一次性重建路径：__init__ 时 view 尚未布局，采样用的
+        # scale/dpr 是默认值；首显后 fit_board 已按真实 viewport 生效，
+        # 用真实缩放重建保证像素级平滑。仅一次（防最小化恢复等重复触发）。
+        if not self._did_initial_rebuild:
+            self._did_initial_rebuild = True
+            QTimer.singleShot(0, self._rebuild_piece_paths)
+
+    def _rebuild_piece_paths(self) -> None:
+        """按当前 view 真实缩放与设备像素比重建全部碎片路径（首显一次性）。"""
+        if not self._pieces or self._grid_ctx is None:
+            return
+        self.view.fit_board()
+        scale = self.view.transform().m11()
+        dpr = self.view.devicePixelRatioF()
+        rows, cols, cell_w, cell_h, h_knobs, v_knobs, h_styles, v_styles = self._grid_ctx
+        for i, piece in enumerate(self._pieces):
+            r, c = divmod(i, cols)
+            path = build_piece_path(
+                r, c, cell_w, cell_h, rows, cols,
+                h_knobs, v_knobs, h_styles, v_styles,
+                scale=scale, dpr=dpr,
+            )
+            piece.set_path(path)
 
     def _image_size(self, image: PuzzleImage) -> tuple[int, int]:
         # 用 QImage 探测实际像素尺寸（对应网页端自然宽高）
