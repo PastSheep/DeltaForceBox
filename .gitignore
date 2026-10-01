@@ -43,6 +43,7 @@ data/*
 !data/.gitkeep
 
 # 打包与安装程序制作（不入源码库，本地保留供重新打包）
+*.spec
 DeltaForceBox.spec
 docs/打包方案.md
 scripts/build_dist.ps1
