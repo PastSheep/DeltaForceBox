@@ -95,6 +95,34 @@ def format_price(price: int) -> str:
     return f"{price:,}"
 
 
+def _pager_items(current: int, total: int) -> list[tuple[str, int]]:
+    """分页条显示项：(文本, 目标页)。
+
+    - 总页数 <= 7 时全部显示（无省略号）；
+    - 否则固定显示第 1 页与最后一页，当前页前后各 2 页；
+    - 存在间隙时插入可点击省略号（"···"，点击向省略方向跳 5 页并收敛到边界）。
+
+    示例（total=64）：n=1 → 1·2·3···64；n=32 → 1···30·31·32·33·34···64；
+    n=64 → 1···62·63·64。
+    """
+    current = max(1, min(current, total))
+    if total <= 7:
+        return [(str(i), i) for i in range(1, total + 1)]
+    left = max(1, current - 2)
+    right = min(total, current + 2)
+    items: list[tuple[str, int]] = [(str(1), 1)]
+    if left > 2:  # 1 与窗口左侧之间有间隙
+        items.append(("···", max(2, current - 5)))
+    for i in range(left, right + 1):
+        if i == 1 or i == total:
+            continue  # 两端已在首尾固定显示
+        items.append((str(i), i))
+    if right < total - 1:  # 窗口右侧与最后一页之间有间隙
+        items.append(("···", min(total - 1, current + 5)))
+    items.append((str(total), total))
+    return items
+
+
 def _cached_pixmap(path: Path, key: str) -> QPixmap | None:
     """带内存缓存（QPixmapCache LRU）的图片加载：先查内存，再读磁盘。
 
@@ -370,15 +398,17 @@ class GunCodePage(QWidget):
         self.prev_btn = QPushButton()
         self.prev_btn.setObjectName("gunPagerBtn")
         self.prev_btn.clicked.connect(lambda: self._goto_page(self._page_index - 1))
-        self.page_label = QLabel()
-        self.page_label.setObjectName("gunPagerLabel")
-        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.next_btn = QPushButton()
         self.next_btn.setObjectName("gunPagerBtn")
         self.next_btn.clicked.connect(lambda: self._goto_page(self._page_index + 1))
+        # 动态页码条：1···n-2·n-1·n·n+1·n+2···s，各项可点击跳转（居中）
+        self.pager_numbers = QHBoxLayout()
+        self.pager_numbers.setSpacing(2)
+        pager_row.addStretch(1)
         pager_row.addWidget(self.prev_btn)
-        pager_row.addWidget(self.page_label, 1)
+        pager_row.addLayout(self.pager_numbers)
         pager_row.addWidget(self.next_btn)
+        pager_row.addStretch(1)
 
         root.addWidget(self.title_label)
         root.addWidget(self.status_label)
@@ -572,15 +602,38 @@ class GunCodePage(QWidget):
         self._render_page(stale)
 
     def _update_pager(self) -> None:
-        """刷新翻页控件：页码文本 + 边界按钮禁用状态。"""
+        """刷新翻页控件：重建页码条 + 边界按钮禁用状态。"""
         total = len(self._filtered)
         self._total_pages = max(1, math.ceil(total / self._page_size))
-        self.page_label.setText(
-            self._i18n.t("guncode.page_info").replace("%1", str(self._page_index + 1))
-            .replace("%2", str(self._total_pages))
-        )
+        self._rebuild_pager_numbers()
         self.prev_btn.setEnabled(self._page_index > 0)
         self.next_btn.setEnabled(self._page_index < self._total_pages - 1)
+
+    def _rebuild_pager_numbers(self) -> None:
+        """重建页码条按钮（当前页高亮，数字/省略号均可点击跳转）。
+
+        按钮随 _update_pager 频繁重建，用 shiboken6.delete 立即释放 C++
+        对象（deleteLater 在退出场景与 Python GC 双重删除会崩溃）。
+        """
+        while self.pager_numbers.count():
+            item = self.pager_numbers.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                try:
+                    from shiboken6 import delete as _qt_delete
+                    _qt_delete(w)
+                except ImportError:
+                    w.deleteLater()
+        current = self._page_index + 1
+        for text, target in _pager_items(current, self._total_pages):
+            btn = QPushButton(text)
+            btn.setObjectName("gunPagerNumActive" if target == current else "gunPagerNum")
+            btn.setFixedSize(30, 26)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(
+                lambda _checked=False, page=target: self._goto_page(page - 1)
+            )
+            self.pager_numbers.addWidget(btn)
 
     def _update_status(self, stale: bool = False) -> None:
         """更新状态行：方案数 + 更新/来源信息。"""

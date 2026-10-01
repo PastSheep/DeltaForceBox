@@ -401,4 +401,23 @@ QPushButton#gunPagerBtn {
 }
 QPushButton#gunPagerBtn:hover { background: rgba(255, 255, 255, 0.16); }
 QPushButton#gunPagerBtn:disabled { color: rgba(232, 232, 234, 0.35); }
+QPushButton#gunPagerNum {
+  min-width: 30px;
+  min-height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8e8ea;
+  padding: 0;
+}
+QPushButton#gunPagerNum:hover { background: rgba(255, 255, 255, 0.16); }
+QPushButton#gunPagerNumActive {
+  min-width: 30px;
+  min-height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: #2d6cdf;
+  color: #ffffff;
+  padding: 0;
+}
 QLabel#gunPagerLabel { color: #b8b8bd; padding: 0 8px; }

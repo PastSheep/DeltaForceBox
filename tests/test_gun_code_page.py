@@ -162,6 +162,25 @@ def _make_solutions(n: int) -> list[GunSolution]:
     ]
 
 
+def _pager_btns(page: GunCodePage) -> list:
+    """当前页码条按钮列表（按显示顺序）。"""
+    from PySide6.QtWidgets import QPushButton
+
+    return [
+        page.pager_numbers.itemAt(i).widget()
+        for i in range(page.pager_numbers.count())
+        if isinstance(page.pager_numbers.itemAt(i).widget(), QPushButton)
+    ]
+
+
+def _pager_active_text(page: GunCodePage) -> str:
+    """当前高亮页码（objectName=gunPagerNumActive 的按钮文本）。"""
+    for btn in _pager_btns(page):
+        if btn.objectName() == "gunPagerNumActive":
+            return btn.text()
+    raise AssertionError("页码条缺少当前页高亮按钮")
+
+
 def test_render_first_page_only(page: GunCodePage) -> None:
     """100 条（5 页）-> 初始只渲染第 1 页 20 张；翻页控件状态正确。"""
     page._set_solutions(_make_solutions(100))
@@ -169,7 +188,8 @@ def test_render_first_page_only(page: GunCodePage) -> None:
     assert len(page._cards) == 20
     assert page._page_index == 0
     assert page._total_pages == 5
-    assert page.page_label.text() == "第 1 / 5 页"
+    assert [b.text() for b in _pager_btns(page)] == ["1", "2", "3", "4", "5"]
+    assert _pager_active_text(page) == "1"
     assert not page.prev_btn.isEnabled()
     assert page.next_btn.isEnabled()
     assert page._cards[0].solution.id == 0
@@ -182,7 +202,7 @@ def test_goto_next_page(page: GunCodePage) -> None:
     page._goto_page(1)
     assert page._page_index == 1
     assert len(page._cards) == 20
-    assert page.page_label.text() == "第 2 / 5 页"
+    assert _pager_active_text(page) == "2"
     assert page.prev_btn.isEnabled()
     assert page.next_btn.isEnabled()
     assert page._cards[0].solution.id == 20
@@ -194,7 +214,7 @@ def test_goto_last_page(page: GunCodePage) -> None:
     page._goto_page(4)
     assert page._page_index == 4
     assert len(page._cards) == 20
-    assert page.page_label.text() == "第 5 / 5 页"
+    assert _pager_active_text(page) == "5"
     assert not page.next_btn.isEnabled()
     assert page._cards[0].solution.id == 80
 
@@ -226,10 +246,10 @@ def test_pager_buttons_navigate(page: GunCodePage) -> None:
     page._set_solutions(_make_solutions(100))
     page.next_btn.click()
     assert page._page_index == 1
-    assert page.page_label.text() == "第 2 / 5 页"
+    assert _pager_active_text(page) == "2"
     page.prev_btn.click()
     assert page._page_index == 0
-    assert page.page_label.text() == "第 1 / 5 页"
+    assert _pager_active_text(page) == "1"
 
 
 def test_last_page_short(page: GunCodePage) -> None:
@@ -251,6 +271,77 @@ def test_single_page_disables_both_buttons(page: GunCodePage) -> None:
     assert len(page._all_solutions) == 3
     # 状态行显示共 N 条
     assert "共 3 条方案" in page.status_label.text()
+
+
+# ── 页码条（1···n-2·n-1·n·n+1·n+2···s） ─────────────
+
+def test_pager_items_all_pages_when_small() -> None:
+    """总数 <= 7：全部显示、无省略号。"""
+    from deltaforcebox.widgets.pages.gun_code_page import _pager_items
+
+    assert _pager_items(1, 1) == [("1", 1)]
+    assert _pager_items(1, 7) == [(str(i), i) for i in range(1, 8)]
+    assert _pager_items(4, 7) == [(str(i), i) for i in range(1, 8)]
+
+
+def test_pager_items_window() -> None:
+    """total=64 中部：1···30·31·32·33·34···64。"""
+    from deltaforcebox.widgets.pages.gun_code_page import _pager_items
+
+    items = _pager_items(32, 64)
+    assert [t for t, _ in items] == ["1", "···", "30", "31", "32", "33", "34", "···", "64"]
+    assert items[1][1] == 27  # 左省略跳 32-5
+    assert items[-2][1] == 37  # 右省略跳 32+5
+
+
+def test_pager_items_boundaries() -> None:
+    """边界：贴左/贴右/收敛/极小总数。"""
+    from deltaforcebox.widgets.pages.gun_code_page import _pager_items
+
+    # n=1：无左省略
+    assert [t for t, _ in _pager_items(1, 64)] == ["1", "2", "3", "···", "64"]
+    # n=4：窗口贴左，仍无左省略
+    assert [t for t, _ in _pager_items(4, 64)] == ["1", "2", "3", "4", "5", "6", "···", "64"]
+    # n=64：无右省略
+    assert [t for t, _ in _pager_items(64, 64)] == ["1", "···", "62", "63", "64"]
+    # n=5：左省略跳转收敛到 2
+    assert _pager_items(5, 64)[1] == ("···", 2)
+    # n=61：窗口含 63，右端无省略
+    assert [t for t, _ in _pager_items(61, 64)] == ["1", "···", "59", "60", "61", "62", "63", "64"]
+    # n=60：右省略跳转收敛到 63
+    assert _pager_items(60, 64)[-2] == ("···", 63)
+    # total=8 的最小省略场景
+    assert [t for t, _ in _pager_items(8, 8)] == ["1", "···", "6", "7", "8"]
+    # 越界输入收敛
+    assert [t for t, _ in _pager_items(0, 64)] == ["1", "2", "3", "···", "64"]
+    assert [t for t, _ in _pager_items(99, 64)] == ["1", "···", "62", "63", "64"]
+
+
+def test_pager_bar_number_click(page: GunCodePage) -> None:
+    """数字按钮点击跳转 + 高亮迁移（objectName 区分当前页）。"""
+    page._set_solutions(_make_solutions(100))  # 5 页全显示
+    btns = _pager_btns(page)
+    assert [b.text() for b in btns] == ["1", "2", "3", "4", "5"]
+    assert btns[0].objectName() == "gunPagerNumActive"
+    assert btns[1].objectName() == "gunPagerNum"
+    btns[2].click()  # 第 3 页
+    assert page._page_index == 2
+    assert _pager_active_text(page) == "3"
+
+
+def test_pager_bar_ellipsis_click(page: GunCodePage) -> None:
+    """省略号点击：向省略方向跳 5 页；多页时显示省略号。"""
+    page._set_solutions(_make_solutions(1000))  # 50 页
+    page._goto_page(31)  # 第 32 页
+    texts = [b.text() for b in _pager_btns(page)]
+    assert texts == ["1", "···", "30", "31", "32", "33", "34", "···", "50"]
+    _pager_btns(page)[1].click()  # 左省略 -> 第 27 页
+    assert page._page_index == 26
+    assert _pager_active_text(page) == "27"
+    page._goto_page(31)
+    _pager_btns(page)[-2].click()  # 右省略 -> 第 37 页
+    assert page._page_index == 36
+    assert _pager_active_text(page) == "37"
 
 
 def test_pixmap_cache_memory_layer(page: GunCodePage, tmp_path: Path) -> None:
