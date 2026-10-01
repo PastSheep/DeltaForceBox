@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from .core.daily_password import normalize_source_order
 from .core.i18n import DEFAULT_LANGUAGE, I18nManager
 from .core.paths import RESOURCES_DIR
 from .core.settings import DEFAULT_SETTINGS, load_settings, save_settings
@@ -52,5 +53,12 @@ def build_app(
     i18n.changed.connect(_persist)
 
     puzzle_pieces = settings.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES)
-    window = MainWindow(i18n, theme, puzzle_pieces=puzzle_pieces)
+    password_sources = normalize_source_order(settings.get("password_source_order"))
+    window = MainWindow(
+        i18n,
+        theme,
+        puzzle_pieces=puzzle_pieces,
+        password_sources=password_sources,
+        settings_path=settings_path,
+    )
     return app, window

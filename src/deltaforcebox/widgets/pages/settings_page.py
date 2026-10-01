@@ -1,14 +1,21 @@
-"""设置页：语言切换（当前仅中文）与主题切换。"""
+"""设置页：语言切换（当前仅中文）、主题切换与每日密码来源优先级。"""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
 
+from ...core.daily_password import normalize_source_order
 from ...core.i18n import I18nManager
+from ...core.settings import load_settings, save_settings
 from ...core.theme import ThemeManager
 
 # 语言下拉选项；英文支持后续加入时在此追加 ("en", "English")
 LANGUAGE_ITEMS = (("zh", "中文"),)
+
+# 每日密码数据源选项（顺序即 fallback 优先级，靠前者优先）
+PASSWORD_SOURCE_ITEMS = ("tmini", "shushu_fan")
 
 
 class SettingsPage(QWidget):
@@ -16,12 +23,14 @@ class SettingsPage(QWidget):
         self,
         i18n: I18nManager,
         theme: ThemeManager,
+        settings_path: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("pageRoot")
         self._i18n = i18n
         self._theme = theme
+        self._settings_path = settings_path
 
         layout = QFormLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -43,12 +52,22 @@ class SettingsPage(QWidget):
         self.theme_label = QLabel()
         self.theme_combo = QComboBox()
 
+        # 每日密码来源：优先尝试首选源，失败自动回退其余源
+        self.source_label = QLabel()
+        self.source_combo = QComboBox()
+        for name in PASSWORD_SOURCE_ITEMS:
+            self.source_combo.addItem(i18n.t(f"settings.password_source.{name}"), name)
+        order = normalize_source_order(load_settings(settings_path).get("password_source_order"))
+        self.source_combo.setCurrentIndex(max(0, self.source_combo.findData(order[0])))
+
         layout.addRow(self.lang_label, self.lang_combo)
         layout.addRow(self.theme_label, self.theme_combo)
+        layout.addRow(self.source_label, self.source_combo)
         layout.addRow(QLabel())
 
         self.lang_combo.currentIndexChanged.connect(self._on_language_changed)
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        self.source_combo.currentIndexChanged.connect(self._on_source_changed)
         self._refresh_theme_combo()
 
     def _on_language_changed(self, index: int) -> None:
@@ -60,6 +79,17 @@ class SettingsPage(QWidget):
         name = self.theme_combo.itemData(index)
         if name:
             self._theme.set_theme(name)
+
+    def _on_source_changed(self, index: int) -> None:
+        """首选来源变更：重排优先级顺序（首选置顶，其余保序）并持久化。"""
+        name = self.source_combo.itemData(index)
+        if not name:
+            return
+        settings = load_settings(self._settings_path)
+        order = list(normalize_source_order(settings.get("password_source_order")))
+        order = [name] + [s for s in order if s != name]
+        settings["password_source_order"] = order
+        save_settings(settings, self._settings_path)
 
     def _refresh_theme_combo(self) -> None:
         self.theme_combo.blockSignals(True)
@@ -73,4 +103,8 @@ class SettingsPage(QWidget):
         self.title_label.setText(self._i18n.t("settings.title"))
         self.lang_label.setText(self._i18n.t("settings.language"))
         self.theme_label.setText(self._i18n.t("settings.theme"))
+        self.source_label.setText(self._i18n.t("settings.password_source"))
+        for i in range(self.source_combo.count()):
+            name = self.source_combo.itemData(i)
+            self.source_combo.setItemText(i, self._i18n.t(f"settings.password_source.{name}"))
         self._refresh_theme_combo()

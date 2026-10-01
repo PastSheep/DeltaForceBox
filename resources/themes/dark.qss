@@ -165,6 +165,47 @@ QLabel#sourceBest {
     font-weight: 600;
 }
 
+/* Daily password cards */
+QScrollArea#pwdList {
+    background: transparent;
+    border: none;
+}
+QWidget#pwdFlowHost {
+    background: transparent;
+}
+QFrame#pwdCard {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    border-radius: 10px;
+}
+QFrame#pwdCard:hover {
+    border-color: #5b9cff;
+}
+QLabel#pwdTitle {
+    color: #d7dce3;
+    font-weight: 600;
+}
+QLabel#pwdCode {
+    font-size: 26px;
+    font-weight: 700;
+    color: #5b9cff;
+}
+QLabel#pwdImage {
+    border-radius: 6px;
+    background-color: #000000;
+}
+QLabel#pwdLoc {
+    color: #7d8794;
+    background: transparent;
+}
+QScrollArea#pwdDescScroll {
+    background: transparent;
+    border: none;
+}
+QScrollArea#pwdDescScroll > QWidget > QWidget {
+    background: transparent;
+}
+
 /* Scrollbar */
 QScrollBar:vertical {
     background: transparent;

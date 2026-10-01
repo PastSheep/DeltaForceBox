@@ -16,8 +16,9 @@ def test_main_window_builds(qapp):
     # 系统标题栏文本隐藏，品牌名在侧栏顶部展示
     assert window.windowTitle() == ""
     assert window.app_title_label.text() == i18n.t("app.title")
-    assert window.sidebar.topLevelItemCount() == 3
-    assert window.stack.count() == 3
+    # 一级项：首页 / 小游戏 / 鼠鼠工具 / 设置
+    assert window.sidebar.topLevelItemCount() == 4
+    assert window.stack.count() == 4
 
 
 def test_startup_home_selected_and_highlighted(qapp):
@@ -30,7 +31,7 @@ def test_startup_home_selected_and_highlighted(qapp):
 
 
 def test_sidebar_structure_with_group(qapp):
-    """一级项：首页 / 小游戏分组 / 设置；拼图归入小游戏分组。"""
+    """一级项：首页 / 小游戏分组 / 鼠鼠工具分组 / 设置；功能页归入各自分组。"""
     i18n = I18nManager()
     window = MainWindow(i18n, ThemeManager())
     sidebar = window.sidebar
@@ -40,11 +41,17 @@ def test_sidebar_structure_with_group(qapp):
     assert group.text(0) == i18n.t("sidebar.games")
     assert group.childCount() == 1
     assert group.child(0).text(0) == i18n.t("sidebar.puzzle")
-    assert sidebar.topLevelItem(2).text(0) == i18n.t("sidebar.settings")
+    tools = sidebar.topLevelItem(2)
+    assert tools.text(0) == i18n.t("sidebar.tools")
+    assert tools.childCount() == 1
+    assert tools.child(0).text(0) == i18n.t("sidebar.daily_password")
+    assert sidebar.topLevelItem(3).text(0) == i18n.t("sidebar.settings")
 
     # 分组默认展开，且分组项不可选中
     assert group.isExpanded()
+    assert tools.isExpanded()
     assert not (group.flags() & Qt.ItemFlag.ItemIsSelectable)
+    assert not (tools.flags() & Qt.ItemFlag.ItemIsSelectable)
 
 
 def test_group_click_toggles_expand_and_keeps_page(qapp):
@@ -71,7 +78,7 @@ def test_leaf_click_switches_page(qapp):
 
     sidebar.setCurrentItem(puzzle_item)
     assert window.stack.currentWidget() is window.pages["puzzle"]
-    sidebar.setCurrentItem(sidebar.topLevelItem(2))
+    sidebar.setCurrentItem(sidebar.topLevelItem(3))
     assert window.stack.currentWidget() is window.pages["settings"]
 
 

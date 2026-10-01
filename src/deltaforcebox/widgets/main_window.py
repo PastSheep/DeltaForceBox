@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
 from ..core.i18n import I18nManager
 from ..core.theme import ThemeManager
 from ..games.puzzle.puzzle_page import PuzzlePage
+from .pages.daily_password_page import DailyPasswordPage
 from .pages.home_page import HomePage
 from .pages.settings_page import SettingsPage
 
@@ -37,6 +40,7 @@ SIDEBAR_INITIAL_WIDTH = 190
 SIDEBAR_ITEMS = (
     ("home", "sidebar.home", ()),
     ("games", "sidebar.games", (("puzzle", "sidebar.puzzle"),)),
+    ("tools", "sidebar.tools", (("daily_password", "sidebar.daily_password"),)),
     ("settings", "sidebar.settings", ()),
 )
 
@@ -78,11 +82,15 @@ class MainWindow(QMainWindow):
         i18n: I18nManager,
         theme: ThemeManager,
         puzzle_pieces: int = 48,
+        password_sources: tuple[str, ...] | None = None,
+        settings_path: Path | None = None,
     ) -> None:
         super().__init__()
         self._i18n = i18n
         self._theme = theme
         self._puzzle_pieces = puzzle_pieces
+        self._password_sources = password_sources
+        self._settings_path = settings_path
 
         central = QWidget()
         central.setObjectName("central")
@@ -113,7 +121,12 @@ class MainWindow(QMainWindow):
         self.pages = {
             "home": HomePage(i18n),
             "puzzle": PuzzlePage(i18n, theme, puzzle_pieces=self._puzzle_pieces),
-            "settings": SettingsPage(i18n, theme),
+            "daily_password": DailyPasswordPage(
+                i18n,
+                theme,
+                source_order=self._password_sources,
+            ),
+            "settings": SettingsPage(i18n, theme, settings_path=self._settings_path),
         }
         for key, page in self.pages.items():
             self.stack.addWidget(page)

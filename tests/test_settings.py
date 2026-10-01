@@ -81,3 +81,48 @@ def test_build_app_passes_puzzle_pieces(qapp, tmp_path):
     save_settings({"theme": "dark", "language": "zh", "puzzle_pieces": 60}, path)
     _app, window = build_app(settings_path=path)
     assert window.pages["puzzle"]._target_pieces == 60
+
+
+# ── 每日密码来源优先级 ────────────────────────────────
+
+def test_password_source_order_roundtrip(tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "dark", "language": "zh", "password_source_order": ["shushu_fan", "tmini"]},
+        path,
+    )
+    loaded = load_settings(path)
+    assert loaded["password_source_order"] == ["shushu_fan", "tmini"]
+
+
+def test_theme_change_preserves_password_source_order(qapp, tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "light", "language": "zh", "password_source_order": ["shushu_fan", "tmini"]},
+        path,
+    )
+    _app, window = build_app(settings_path=path)
+    window._theme.set_theme("dark")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["theme"] == "dark"
+    assert data["password_source_order"] == ["shushu_fan", "tmini"]
+
+
+def test_build_app_passes_password_sources(qapp, tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "dark", "language": "zh", "password_source_order": ["shushu_fan", "tmini"]},
+        path,
+    )
+    _app, window = build_app(settings_path=path)
+    assert window.pages["daily_password"]._order == ("shushu_fan", "tmini")
+
+
+def test_settings_page_source_combo_repersists(qapp, tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings({"theme": "dark", "language": "zh"}, path)
+    _app, window = build_app(settings_path=path)
+    page = window.pages["settings"]
+    page.source_combo.setCurrentIndex(page.source_combo.findData("shushu_fan"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["password_source_order"] == ["shushu_fan", "tmini"]
