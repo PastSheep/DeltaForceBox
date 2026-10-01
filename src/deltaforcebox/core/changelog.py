@@ -16,7 +16,7 @@ CHANGELOG_PATH = PROJECT_ROOT / "docs" / "版本日志.md"
 def load_latest_update(doc_path: Path | None = None) -> dict | None:
     """返回最新版本节的结构化内容；文件缺失/格式不符时返回 None。
 
-    返回结构：{"version": "Beta-1.0", "intro": "…", "sections": [{"title": "…", "items": [...]}]}
+    返回结构：{"version": "Beta-1.1", "intro": "…", "sections": [{"title": "…", "items": [...]}]}
     """
     path = doc_path or CHANGELOG_PATH
     try:
@@ -31,7 +31,7 @@ def load_latest_update(doc_path: Path | None = None) -> dict | None:
     if start is None:
         return None
 
-    # 版本号取标题括号前的部分（"Beta-1.0（2026-10-01）" → "Beta-1.0"）
+    # 版本号取标题括号前的部分（"Beta-1.1（2026-10-01）" → "Beta-1.1"）
     version = lines[start][3:].split("（", 1)[0].strip()
 
     intro = ""

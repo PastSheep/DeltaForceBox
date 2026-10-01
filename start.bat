@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Delta Force Box Launcher
+title 鼠鼠大王工具箱
 
 set "PY=.venv\Scripts\python.exe"
 set "PYW=.venv\Scripts\pythonw.exe"
