@@ -1,7 +1,8 @@
 """拼图算法单元测试：网格计算、凸凹方向、路径几何。
 
 验证要点（对照网页端行为）：
-- 网格行列 ≥2，短边块数 ≥4，单元格为正方形；
+- 网格行列 ≥2，单元格为正方形，碎片总数稳定在目标值 48 附近（[36,60]）；
+- 极端宽高比（4:1 / 10:1 / 1:4）下碎片数有界、cell 不低于可玩下限；
 - 相邻碎片共享边凸凹互补：共享边界处的圆弧路径在两块上几何重合；
 - 碎片路径闭合，包围盒含凸起范围（0.18×cell 外扩）。
 """
@@ -12,25 +13,56 @@ import random
 
 from PySide6.QtCore import QPointF
 
-from deltaforcebox.games.puzzle import build_piece_path, compute_grid_dynamic, create_knobs
+from deltaforcebox.games.puzzle import (
+    build_piece_path,
+    compute_grid_dynamic,
+    create_knobs,
+)
+from deltaforcebox.games.puzzle.grid import MIN_CELL, TARGET_PIECES
 
 KNOB_R = 0.18
 
+# 碎片总数容差：与验收一致（|n − 48| ≤ 12，即 [36,60]）
+PIECES_TOL = 12
+
 
 def test_grid_basic():
-    rows, cols, cell_w, cell_h = compute_grid_dynamic(100, 100, target_cell=18)
+    rows, cols, cell_w, cell_h = compute_grid_dynamic(100, 100)
     assert rows >= 2 and cols >= 2
     assert rows == cols  # 正方形图片
     assert abs(cell_w - cell_h) < 1e-9
-    assert max(rows, cols) >= 4  # 短边块数 >= 4
-    assert abs(rows * cell_w - 100) < 1e-6  # 网格覆盖面积 ≈ 原图
+    assert abs(rows * cols - TARGET_PIECES) <= PIECES_TOL
+    assert cell_w >= MIN_CELL
+    assert rows * cell_w <= 100 + 1e-6  # 网格不超出原图
 
 
 def test_grid_wide_image():
-    rows, cols, cell_w, cell_h = compute_grid_dynamic(178, 100, target_cell=18)
+    rows, cols, cell_w, cell_h = compute_grid_dynamic(178, 100)
     assert rows >= 2 and cols >= 2
     assert abs(cell_w - cell_h) < 1e-9
-    assert abs(rows * cell_h - 100) < 1e-6
+    assert abs(rows * cols - TARGET_PIECES) <= PIECES_TOL
+    assert cell_w >= MIN_CELL
+    assert rows * cell_h <= 100 + 1e-6  # 网格不超出原图（floor 留白由画布边距吸收）
+
+
+def test_grid_extreme_ratios():
+    """极端宽高比：碎片数有界（≤60 且 ≥min_pieces）、cell 可玩、行列 ≥2。"""
+    for width, height in ((400, 100), (1000, 100), (100, 400)):
+        rows, cols, cell_w, cell_h = compute_grid_dynamic(width, height)
+        assert rows >= 2 and cols >= 2, (width, height)
+        assert abs(cell_w - cell_h) < 1e-9
+        n = rows * cols
+        assert 4 <= n <= TARGET_PIECES + PIECES_TOL, (width, height, n)
+        assert cell_w >= MIN_CELL, (width, height, cell_w)
+
+
+def test_grid_small_area_respects_min_cell():
+    """小面积图：cell 不低于可玩下限（碎片数可低于目标值，但不爆炸）。"""
+    rows, cols, cell_w, cell_h = compute_grid_dynamic(50, 50)
+    assert rows >= 2 and cols >= 2
+    assert abs(cell_w - cell_h) < 1e-9
+    assert cell_w >= MIN_CELL
+    assert rows * cols >= 4
 
 
 def test_knobs_shape():

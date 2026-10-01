@@ -42,7 +42,6 @@ from .piece_item import SNAP_THRESHOLD, PieceItem
 from .source_dialog import SourceDialog
 
 # 与网页端一致的参数
-TARGET_CELL = 18.0  # 桌面端单块目标尺寸
 SCATTER_ROTATE_RANGE = 25.0  # 打散随机旋转 ±25°
 KNOB_RADIUS_FACTOR = 0.18
 
@@ -190,7 +189,7 @@ class PuzzlePage(QWidget):
             # 与网页端一致：先归一化到高=100 的 viewBox 比例，再计算网格
             h_base = 100.0
             w_base = (img_w / img_h) * h_base
-            rows, cols, cell_w, cell_h = compute_grid_dynamic(w_base, h_base, TARGET_CELL)
+            rows, cols, cell_w, cell_h = compute_grid_dynamic(w_base, h_base)
             grid_w = cols * cell_w
             grid_h = rows * cell_h
             self._board_rect = QRectF(0, 0, grid_w, grid_h)
