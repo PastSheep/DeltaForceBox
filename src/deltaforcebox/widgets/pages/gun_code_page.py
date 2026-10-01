@@ -377,11 +377,29 @@ class GunCodePage(QWidget):
             filter_row.addWidget(label)
             combo = QComboBox()
             combo.setObjectName("gunFilter")
-            combo.setMinimumWidth(110)
+            combo.setMinimumWidth(96)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             self._filter_combos[dim] = combo
             filter_row.addWidget(combo)
         filter_row.addStretch(1)
+
+        # 翻页按钮：上一页 / 下一页（紧凑符号 < 与 >，位于筛选行右侧）
+        self.prev_btn = QPushButton()
+        self.prev_btn.setObjectName("gunPagerBtn")
+        self.prev_btn.clicked.connect(lambda: self._goto_page(self._page_index - 1))
+        self.next_btn = QPushButton()
+        self.next_btn.setObjectName("gunPagerBtn")
+        self.next_btn.clicked.connect(lambda: self._goto_page(self._page_index + 1))
+        filter_row.addWidget(self.prev_btn)
+        filter_row.addWidget(self.next_btn)
+
+        # 动态页码条：1···n-2·n-1·n·n+1·n+2···s（独立行居中，各项可点击跳转）
+        self.pager_numbers = QHBoxLayout()
+        self.pager_numbers.setSpacing(2)
+        pager_row = QHBoxLayout()
+        pager_row.addStretch(1)
+        pager_row.addLayout(self.pager_numbers)
+        pager_row.addStretch(1)
 
         self.scroll = QScrollArea()
         self.scroll.setObjectName("gunList")
@@ -391,24 +409,6 @@ class GunCodePage(QWidget):
         self._flow_host.setObjectName("gunFlowHost")
         self._flow = FlowLayout(self._flow_host, spacing=GRID_PADDING)
         self.scroll.setWidget(self._flow_host)
-
-        # 翻页控件：上一页 / 页码 / 下一页（参考 shushu.fan 交互，本地数据零成本）
-        pager_row = QHBoxLayout()
-        pager_row.setSpacing(8)
-        self.prev_btn = QPushButton()
-        self.prev_btn.setObjectName("gunPagerBtn")
-        self.prev_btn.clicked.connect(lambda: self._goto_page(self._page_index - 1))
-        self.next_btn = QPushButton()
-        self.next_btn.setObjectName("gunPagerBtn")
-        self.next_btn.clicked.connect(lambda: self._goto_page(self._page_index + 1))
-        # 动态页码条：1···n-2·n-1·n·n+1·n+2···s，各项可点击跳转（居中）
-        self.pager_numbers = QHBoxLayout()
-        self.pager_numbers.setSpacing(2)
-        pager_row.addStretch(1)
-        pager_row.addWidget(self.prev_btn)
-        pager_row.addLayout(self.pager_numbers)
-        pager_row.addWidget(self.next_btn)
-        pager_row.addStretch(1)
 
         root.addWidget(self.title_label)
         root.addWidget(self.status_label)
@@ -518,6 +518,14 @@ class GunCodePage(QWidget):
         _fill(self._filter_combos["gun"], guns)
         _fill(self._filter_combos["author"], authors)
         _fill(self._filter_combos["tag"], tags)
+
+        # 动态宽度：按本维度候选项最长文本设置最小宽度，确保收起状态下
+        # 也能完整显示全部文字（候选项变化时随重建自动更新）
+        for dim in self.FILTER_DIMS:
+            combo = self._filter_combos[dim]
+            fm = combo.fontMetrics()
+            widest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+            combo.setMinimumWidth(widest + 28)
 
         self._filter_combos["weapon"].blockSignals(False)
         self._filter_combos["gun"].blockSignals(False)

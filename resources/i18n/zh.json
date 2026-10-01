@@ -62,6 +62,6 @@
   "common.ok": "确定",
   "common.close": "关闭",
   "guncode.page_info": "第 %1 / %2 页",
-  "guncode.prev_page": "上一页",
-  "guncode.next_page": "下一页"
+  "guncode.prev_page": "<",
+  "guncode.next_page": ">"
 }

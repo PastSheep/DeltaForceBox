@@ -344,6 +344,32 @@ def test_pager_bar_ellipsis_click(page: GunCodePage) -> None:
     assert _pager_active_text(page) == "37"
 
 
+def test_pager_button_symbols(page: GunCodePage) -> None:
+    """上一页/下一页按钮显示紧凑符号 < 与 >（i18n 渲染后）。"""
+    assert page.prev_btn.text() == "<"
+    assert page.next_btn.text() == ">"
+
+
+def test_filter_combo_width_fits_longest(page: GunCodePage) -> None:
+    """筛选框最小宽度按候选项最长文本动态设定，收起时完整显示全部文字。"""
+    for dim in ("weapon", "gun", "author", "tag"):
+        combo = page._filter_combos[dim]
+        fm = combo.fontMetrics()
+        widest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+        assert combo.minimumWidth() >= widest, f"{dim} 宽度不足以容纳最长候选项"
+
+
+def test_filter_combo_width_survives_linkage(page: GunCodePage) -> None:
+    """武器联动收窄枪械选项后，宽度仍不小于当前候选项最长文本。"""
+    page._filter_combos["weapon"].setCurrentIndex(
+        page._filter_combos["weapon"].findData("冲锋枪")
+    )
+    combo = page._filter_combos["gun"]
+    fm = combo.fontMetrics()
+    widest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+    assert combo.minimumWidth() >= widest
+
+
 def test_pixmap_cache_memory_layer(page: GunCodePage, tmp_path: Path) -> None:
     """QPixmapCache 内存层：磁盘加载入缓存；删盘后仍命中（零磁盘 I/O）。"""
     from PySide6.QtGui import QImage, QPixmapCache
