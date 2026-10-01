@@ -5,15 +5,15 @@
   "sidebar.puzzle": "骇爪美图",
   "sidebar.tools": "鼠鼠工具",
   "sidebar.daily_password": "每日密码",
+  "sidebar.gun_code": "改枪码",
+  "sidebar.anchor": "主播推荐",
   "sidebar.settings": "设置",
-
   "home.welcome": "欢迎使用鼠鼠大王工具箱",
   "home.description": "为三角洲玩家提供各种便捷功能，侧边栏切换功能页面。",
   "home.version": "版本",
   "home.latest_update": "最近更新",
   "home.author": "作者",
   "home.email": "联系邮箱",
-
   "settings.title": "设置",
   "settings.language": "语言",
   "settings.theme": "主题",
@@ -22,7 +22,6 @@
   "settings.password_source": "每日密码来源",
   "settings.password_source.tmini": "tmini（推荐）",
   "settings.password_source.shushu_fan": "shushu.fan（备用）",
-
   "dailypwd.title": "每日密码",
   "dailypwd.refresh": "刷新",
   "dailypwd.loading": "正在获取最新密码…",
@@ -34,7 +33,22 @@
   "dailypwd.failed": "获取失败，请检查网络后重试",
   "dailypwd.failed_empty": "暂无缓存数据，且获取失败",
   "dailypwd.no_location": "暂无位置说明",
-
+  "guncode.title": "改枪码 · 主播推荐",
+  "guncode.syncing": "正在同步改枪码数据…",
+  "guncode.updated": "同步时间",
+  "guncode.source": "来源",
+  "guncode.count": "共 %1 条方案",
+  "guncode.stale_hint": "（离线缓存）",
+  "guncode.failed_with_cache": "同步失败，已显示缓存内容",
+  "guncode.failed_empty": "同步失败，且暂无缓存数据",
+  "guncode.copy": "复制改枪码",
+  "guncode.no_image": "暂无预览图",
+  "guncode.filter_weapon": "武器类型",
+  "guncode.filter_gun": "枪械名称",
+  "guncode.filter_author": "作者",
+  "guncode.filter_tag": "标签",
+  "guncode.filter_all": "全部",
+  "guncode.count_filtered": "筛选 %1 / 共 %2 条方案",
   "puzzle.title": "骇爪美图",
   "puzzle.restart": "重新开始",
   "puzzle.sources": "图片来源",
@@ -45,7 +59,9 @@
   "puzzle.sources.count": "共 %1 张图片",
   "puzzle.sources.open": "打开文件位置",
   "puzzle.sources.best": "最快用时",
-
   "common.ok": "确定",
-  "common.close": "关闭"
+  "common.close": "关闭",
+  "guncode.page_info": "第 %1 / %2 页",
+  "guncode.prev_page": "上一页",
+  "guncode.next_page": "下一页"
 }

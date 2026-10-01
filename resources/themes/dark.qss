@@ -277,3 +277,128 @@ QSplitter::handle:horizontal {
 }
 
 QStatusBar { background-color: #232730; border-top: 1px solid #303540; color: #7d8794; }
+
+/* Gun code cards (主播推荐) */
+QScrollArea#gunList {
+    background: transparent;
+    border: none;
+}
+QWidget#gunFlowHost {
+    background: transparent;
+}
+QFrame#gunCard {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    border-radius: 10px;
+}
+QFrame#gunCard:hover {
+    border-color: #5b9cff;
+}
+QLabel#gunPreview {
+    border-radius: 6px;
+    background-color: #1f232b;
+    color: #7d8794;
+    font-size: 11px;
+}
+QLabel#gunTitle {
+    color: #d7dce3;
+    font-weight: 600;
+}
+QLabel#gunMeta {
+    color: #7d8794;
+}
+QLabel#gunAuthor {
+    color: #d7dce3;
+    font-weight: 600;
+}
+QLabel#gunChannel {
+    color: #5b9cff;
+    background-color: rgba(91, 156, 255, 0.16);
+    border-radius: 8px;
+    padding: 1px 6px;
+    font-size: 11px;
+}
+QLabel#gunAvatar {
+    background-color: #3a3f4a;
+    border-radius: 17px;
+    color: #7d8794;
+    font-size: 13px;
+}
+QLabel#gunComment {
+    color: #7d8794;
+}
+QLabel#gunTags {
+    color: #5b9cff;
+}
+QLabel#gunPrice {
+    color: #f3da94;
+    font-weight: 600;
+}
+QPushButton#gunCopy {
+    background-color: #2d6cdf;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+QPushButton#gunCopy:hover {
+    background-color: #3b82f6;
+}
+QPushButton#gunCopy:pressed {
+    background-color: #2458b8;
+}
+
+/* Gun filter bar + desc scroll */
+QLabel#gunFilterLabel {
+    color: #7d8794;
+    font-size: 12px;
+}
+QComboBox#gunFilter {
+    background-color: #232730;
+    border: 1px solid #3a3f4a;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #d7dce3;
+    min-height: 26px;
+}
+QComboBox#gunFilter:hover {
+    border-color: #5b9cff;
+}
+QComboBox#gunFilter::drop-down {
+    border: none;
+    width: 0;
+}
+QComboBox#gunFilter QAbstractItemView {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    border-radius: 6px;
+    color: #d7dce3;
+    selection-background-color: #2d6cdf;
+    selection-color: #ffffff;
+    outline: none;
+}
+QScrollArea#gunDescScroll {
+    background: transparent;
+    border: none;
+}
+QScrollArea#gunDescScroll > QWidget > QWidget {
+    background: transparent;
+}
+QLabel#gunDesc {
+    color: #7d8794;
+    background: transparent;
+    font-size: 12px;
+}
+
+/* 改枪码翻页控件 */
+QPushButton#gunPagerBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 18px;
+  color: #e8e8ea;
+}
+QPushButton#gunPagerBtn:hover { background: rgba(255, 255, 255, 0.16); }
+QPushButton#gunPagerBtn:disabled { color: rgba(232, 232, 234, 0.35); }
+QLabel#gunPagerLabel { color: #b8b8bd; padding: 0 8px; }
