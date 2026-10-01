@@ -18,7 +18,7 @@ def test_main_window_builds(qapp):
     assert window.app_title_label.text() == i18n.t("app.title")
     # 一级项：首页 / 小游戏 / 鼠鼠工具 / 设置
     assert window.sidebar.topLevelItemCount() == 4
-    assert window.stack.count() == 4
+    assert window.stack.count() == 5
 
 
 def test_startup_home_selected_and_highlighted(qapp):
@@ -43,13 +43,17 @@ def test_sidebar_structure_with_group(qapp):
     assert group.child(0).text(0) == i18n.t("sidebar.puzzle")
     tools = sidebar.topLevelItem(2)
     assert tools.text(0) == i18n.t("sidebar.tools")
-    assert tools.childCount() == 1
+    assert tools.childCount() == 2
     assert tools.child(0).text(0) == i18n.t("sidebar.daily_password")
+    gun_group = tools.child(1)
+    assert gun_group.text(0) == i18n.t("sidebar.gun_code")
+    assert gun_group.childCount() == 1
+    assert gun_group.child(0).text(0) == i18n.t("sidebar.anchor")
     assert sidebar.topLevelItem(3).text(0) == i18n.t("sidebar.settings")
 
-    # 分组默认展开，且分组项不可选中
-    assert group.isExpanded()
-    assert tools.isExpanded()
+    # 分组默认收起（用户点击展开），且分组项不可选中
+    assert not group.isExpanded()
+    assert not tools.isExpanded()
     assert not (group.flags() & Qt.ItemFlag.ItemIsSelectable)
     assert not (tools.flags() & Qt.ItemFlag.ItemIsSelectable)
 
@@ -62,11 +66,12 @@ def test_group_click_toggles_expand_and_keeps_page(qapp):
     group = sidebar.topLevelItem(1)
 
     sidebar.setCurrentItem(sidebar.topLevelItem(0))  # 停在首页
+    assert not group.isExpanded(), "分组默认收起"
     window._on_item_clicked(group, 0)
-    assert not group.isExpanded(), "点击分组应收起"
+    assert group.isExpanded(), "点击分组应收起→展开"
     assert window.stack.currentIndex() == window.stack.indexOf(window.pages["home"])
     window._on_item_clicked(group, 0)
-    assert group.isExpanded(), "再次点击应展开"
+    assert not group.isExpanded(), "再次点击应收起"
 
 
 def test_leaf_click_switches_page(qapp):

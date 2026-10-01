@@ -577,11 +577,22 @@ class DailyPasswordPage(QWidget):
         self._order = new_order
 
     def _clear_cards(self) -> None:
+        """移除全部卡片。
+
+        使用 shiboken6.delete 立即删除 C++ 对象（而非 deleteLater）：
+        deleteLater 在事件循环/应用退出时才处理 DeferredDelete，若此时
+        Python 包装器仍被引用会触发双重删除崩溃（Qt Python 绑定经典问题）。
+        """
         while self._flow.count():
             item = self._flow.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                widget.deleteLater()
+                try:
+                    from shiboken6 import delete as _qt_delete
+                except ImportError:
+                    widget.deleteLater()
+                else:
+                    _qt_delete(widget)
 
     # ── 刷新调度 ─────────────────────────────────────
 
