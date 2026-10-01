@@ -1,0 +1,6 @@
+{
+  "puzzle_pieces": 48,
+  "gun_sync_interval_days": 10,
+  "image_cache_limit_mb": 64,
+  "gun_render_page_size": 20
+}

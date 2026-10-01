@@ -80,7 +80,7 @@ class PuzzleView(QGraphicsView):
         self.fit_board()
 
 
-# 拼图碎片数配置边界（data/settings.json 的 puzzle_pieces，不在设置界面显示）
+# 拼图碎片数配置边界（resources/config/app_config.json 的 puzzle_pieces，不在设置界面显示）
 PUZZLE_PIECES_DEFAULT = 48
 PUZZLE_PIECES_MIN = 4
 PUZZLE_PIECES_MAX = 200

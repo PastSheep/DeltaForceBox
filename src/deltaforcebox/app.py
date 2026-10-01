@@ -10,22 +10,29 @@ from PySide6.QtWidgets import QApplication
 from .core.daily_password import normalize_source_order
 from .core.i18n import DEFAULT_LANGUAGE, I18nManager
 from .core.paths import RESOURCES_DIR
-from .core.settings import DEFAULT_SETTINGS, load_settings, save_settings
+from .core.settings import (
+    DEFAULT_APP_CONFIG,
+    load_app_config,
+    load_settings,
+    save_settings,
+)
 from .core.theme import DEFAULT_THEME, ThemeManager
 from .widgets.main_window import MainWindow
 
 APP_ICON = RESOURCES_DIR / "icons" / "app.ico"
-DEFAULT_PUZZLE_PIECES = int(DEFAULT_SETTINGS["puzzle_pieces"])
+DEFAULT_PUZZLE_PIECES = int(DEFAULT_APP_CONFIG["puzzle_pieces"])
 
 
 def build_app(
     argv: list[str] | None = None,
     settings_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> tuple[QApplication, MainWindow]:
     """创建应用实例并装配全部组件。
 
-    按 data/settings.json 中的持久化设置初始化主题与语言，
-    运行中发生变更时自动写回；settings_path 供测试注入临时文件。
+    按 data/settings.json 中的界面设置初始化主题与语言（运行中变更自动写回），
+    按 resources/config/app_config.json 读取隐藏配置（拼图碎片数、改枪码
+    同步间隔等）；settings_path / config_path 供测试注入临时文件。
     """
     app = QApplication.instance() or QApplication(argv or [])
     app.setApplicationName("鼠鼠大王工具箱")
@@ -37,13 +44,14 @@ def build_app(
         app.setWindowIcon(QIcon(str(APP_ICON)))
 
     settings = load_settings(settings_path)
+    config = load_app_config(config_path)
     i18n = I18nManager(language=settings.get("language", DEFAULT_LANGUAGE))
     theme = ThemeManager(theme=settings.get("theme", DEFAULT_THEME))
     theme.apply()
 
     def _persist(_value: str | None = None) -> None:
-        # 先读回现有设置再更新：保留用户在配置文件中手改的字段
-        #（如拼图碎片数 puzzle_pieces），避免主题/语言变更时被覆盖丢失
+        # 界面设置文件不含隐藏配置字段（隐藏配置在 resources/config/），
+        # 写回主题/语言不会影响任何配置文件中的手改项
         values = load_settings(settings_path)
         values["theme"] = theme.theme()
         values["language"] = i18n.language()
@@ -52,12 +60,12 @@ def build_app(
     theme.changed.connect(_persist)
     i18n.changed.connect(_persist)
 
-    puzzle_pieces = settings.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES)
+    puzzle_pieces = int(config.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES))
     password_sources = normalize_source_order(settings.get("password_source_order"))
-    gun_sync_interval_days = int(settings.get("gun_sync_interval_days", 10))
-    gun_render_page_size = int(settings.get("gun_render_page_size", 20))
-    # 改枪码图片内存缓存上限（MB）：全局 LRU，仅配置文件修改
-    image_cache_limit_mb = int(settings.get("image_cache_limit_mb", 64))
+    gun_sync_interval_days = int(config.get("gun_sync_interval_days", 10))
+    gun_render_page_size = int(config.get("gun_render_page_size", 20))
+    # 改枪码图片内存缓存上限（MB）：全局 LRU，仅隐藏配置修改
+    image_cache_limit_mb = int(config.get("image_cache_limit_mb", 64))
     QPixmapCache.setCacheLimit(max(0, image_cache_limit_mb) * 1024)
     window = MainWindow(
         i18n,

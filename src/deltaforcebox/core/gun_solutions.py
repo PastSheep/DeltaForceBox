@@ -9,7 +9,7 @@
 - 兼容边界：totalCount 缺失/变化时以「空页」为结束信号；最后一页不足
   limit 条直接取实际条数；页数变化后重新计算（不硬编码 64）；
 - 仅保留「主播推荐」方案（带 authorDetail 的方案），官方裸方案过滤；
-- 同步间隔由配置文件 gun_sync_interval_days 控制（默认 10 天，不进设置
+- 同步间隔由 resources/config/app_config.json 的 gun_sync_interval_days 控制（默认 10 天，不进设置
   界面）；缓存新鲜时启动/运行均不再请求网络。
 
 缓存（data/guns_cache.json）：
@@ -44,7 +44,7 @@ GUNS_API_URL = "https://shushu.fan/api/guns-code/official"  # 分页 JSON API
 GUNS_CACHE_FILE = "guns_cache.json"
 GUN_IMAGES_DIR = DATA_DIR / "gun_images"
 
-# 默认同步间隔（天）：配置文件 gun_sync_interval_days 可覆盖
+# 默认同步间隔（天）：resources/config/app_config.json 的 gun_sync_interval_days 可覆盖
 DEFAULT_SYNC_INTERVAL_DAYS = 10
 
 # API 分页：limit 上限实测为 50；页间间隔（毫秒），避免突发请求
