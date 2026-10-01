@@ -65,5 +65,6 @@
   "guncode.prev_page": "<",
   "guncode.next_page": ">",
   "guncode.channel_douyin": "抖音",
-  "guncode.channel_bilibili": "B站"
+  "guncode.channel_bilibili": "B站",
+  "guncode.reset_all": "全部重置"
 }

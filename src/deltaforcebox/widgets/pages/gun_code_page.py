@@ -2,7 +2,8 @@
 
 数据流：
 - 启动即显示本地缓存（如有），避免空白与重复请求（上游为第三方站点）；
-- 缓存超过同步间隔（配置 gun_sync_interval_days，默认 10 天）或缺失时，
+- 缓存超过同步间隔（resources/config/app_config.json 的 gun_sync_interval_days，
+  默认 10 天）或缺失时，
   后台线程拉取 shushu.fan/guns 首屏数据并更新缓存；每次同步只 1 次请求；
 - 同步失败：保留缓存展示并标注离线，延后 6 小时再自动重试（不频繁请求）；
 - 无手动刷新按钮（用户明确要求），同步完全由间隔自动触发；
@@ -67,10 +68,12 @@ AVATAR_SIZE = 34
 # 翻页渲染：任何时刻只实例化当前页的卡片（内存峰值固定为单页大小，与
 # 总量无关）；翻页时销毁旧页、创建新页，图片随之懒加载（QPixmap 随卡片
 # 释放，磁盘缓存 data/gun_images/ 保留避免重复下载）。每页卡片数由配置
-# gun_render_page_size 控制（app.py 装配时传入，默认 20，不进设置界面）。
+# gun_render_page_size 控制（resources/config/app_config.json，app.py 装配时
+# 传入，默认 20，不进设置界面）。
 
-# QPixmapCache 全局 LRU 上限由配置 image_cache_limit_mb 控制（app.py 装配时
-# 设置）；本模块只负责"先查内存、再读磁盘"的加载路径。
+# QPixmapCache 全局 LRU 上限由配置 image_cache_limit_mb 控制
+# （resources/config/app_config.json，app.py 装配时设置）；
+# 本模块只负责"先查内存、再读磁盘"的加载路径。
 # 描述滚动区固定高度：评语 + 标签超出部分内部滚动，保证卡片格式统一
 DESC_AREA_HEIGHT = 72
 
@@ -390,22 +393,27 @@ class GunCodePage(QWidget):
             filter_row.addWidget(combo)
         filter_row.addStretch(1)
 
-        # 翻页按钮：上一页 / 下一页（紧凑符号 < 与 >，位于筛选行右侧）
+        # 全部重置：将四个筛选框全部恢复为「全部」（位于筛选行右侧）
+        self.reset_btn = QPushButton()
+        self.reset_btn.setObjectName("gunFilterReset")
+        self.reset_btn.clicked.connect(self._on_reset_filters)
+        filter_row.addWidget(self.reset_btn)
+
+        # 翻页控件：上一页 / 页码条 / 下一页（独立行居中，按钮文本 < 与 >）
         self.prev_btn = QPushButton()
         self.prev_btn.setObjectName("gunPagerBtn")
         self.prev_btn.clicked.connect(lambda: self._goto_page(self._page_index - 1))
         self.next_btn = QPushButton()
         self.next_btn.setObjectName("gunPagerBtn")
         self.next_btn.clicked.connect(lambda: self._goto_page(self._page_index + 1))
-        filter_row.addWidget(self.prev_btn)
-        filter_row.addWidget(self.next_btn)
-
-        # 动态页码条：1···n-2·n-1·n·n+1·n+2···s（独立行居中，各项可点击跳转）
+        # 动态页码条：1···n-2·n-1·n·n+1·n+2···s，各项可点击跳转
         self.pager_numbers = QHBoxLayout()
         self.pager_numbers.setSpacing(2)
         pager_row = QHBoxLayout()
         pager_row.addStretch(1)
+        pager_row.addWidget(self.prev_btn)
         pager_row.addLayout(self.pager_numbers)
+        pager_row.addWidget(self.next_btn)
         pager_row.addStretch(1)
 
         self.scroll = QScrollArea()
@@ -672,6 +680,14 @@ class GunCodePage(QWidget):
             parts.append(self._i18n.t("guncode.stale_hint"))
         self.status_label.setText(" · ".join(parts))
 
+    def _on_reset_filters(self) -> None:
+        """全部重置：四个筛选框恢复为「全部」并重新渲染。"""
+        for combo in self._filter_combos.values():
+            combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(False)
+        self._render_filtered()
+
     def _render_filtered(self, stale: bool = False) -> None:
         """应用当前筛选渲染（筛选状态已存在下拉框时）。"""
         if not self._all_solutions:
@@ -840,6 +856,7 @@ class GunCodePage(QWidget):
             combo.blockSignals(False)
         self.prev_btn.setText(self._i18n.t("guncode.prev_page"))
         self.next_btn.setText(self._i18n.t("guncode.next_page"))
+        self.reset_btn.setText(self._i18n.t("guncode.reset_all"))
         if self._has_content and self._cards:
             self._update_status()
             self._update_pager()

@@ -182,6 +182,26 @@ def _pager_active_text(page: GunCodePage) -> str:
     raise AssertionError("页码条缺少当前页高亮按钮")
 
 
+def test_reset_all_button(page: GunCodePage) -> None:
+    """全部重置：四个筛选框恢复「全部」，渲染恢复全量。"""
+    page._set_solutions(_make_solutions(40))
+    page._filter_combos["weapon"].setCurrentIndex(
+        page._filter_combos["weapon"].findData("狙击步枪")
+    )
+    page._filter_combos["gun"].setCurrentIndex(
+        page._filter_combos["gun"].findData("M700狙击步枪")
+    )
+    page._filter_combos["author"].setCurrentIndex(
+        page._filter_combos["author"].findData("测试主播")
+    )
+    assert page._filter_combos["weapon"].currentIndex() != 0
+    assert page.reset_btn.text() == "全部重置"
+    page.reset_btn.click()
+    for combo in page._filter_combos.values():
+        assert combo.currentIndex() == 0
+    assert len(page._cards) == min(page._page_size, len(page._all_solutions))
+
+
 def test_channel_badge_i18n(page: GunCodePage) -> None:
     """平台徽标走 i18n：douyin -> 抖音、bilibili -> B站；未知平台回退原标识。"""
     page._set_solutions([

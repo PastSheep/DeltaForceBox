@@ -392,14 +392,14 @@ QLabel#gunDesc {
 }
 
 /* 改枪码翻页控件 */
-QPushButton#gunPagerBtn {
+QPushButton#gunPagerBtn, QPushButton#gunFilterReset {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   padding: 4px 10px;
   color: #e8e8ea;
 }
-QPushButton#gunPagerBtn:hover { background: rgba(255, 255, 255, 0.16); }
+QPushButton#gunPagerBtn:hover, QPushButton#gunFilterReset:hover { background: rgba(255, 255, 255, 0.16); }
 QPushButton#gunPagerBtn:disabled { color: rgba(232, 232, 234, 0.35); }
 QPushButton#gunPagerNum {
   min-width: 30px;
