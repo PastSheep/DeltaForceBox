@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtWidgets import QLabel
 
 from deltaforcebox.core.gun_solutions import (
     GunSolution,
@@ -179,6 +180,24 @@ def _pager_active_text(page: GunCodePage) -> str:
         if btn.objectName() == "gunPagerNumActive":
             return btn.text()
     raise AssertionError("页码条缺少当前页高亮按钮")
+
+
+def test_channel_badge_i18n(page: GunCodePage) -> None:
+    """平台徽标走 i18n：douyin -> 抖音、bilibili -> B站；未知平台回退原标识。"""
+    page._set_solutions([
+        GunSolution(id=1, name="a", gun_name="枪A", weapon_type="步枪", author="主播A",
+                    channel="douyin", solution_code="C1", tags=[], price=1),
+        GunSolution(id=2, name="b", gun_name="枪B", weapon_type="步枪", author="主播B",
+                    channel="bilibili", solution_code="C2", tags=[], price=1),
+        GunSolution(id=3, name="c", gun_name="枪C", weapon_type="步枪", author="主播C",
+                    channel="youtube", solution_code="C3", tags=[], price=1),
+    ])
+    texts = sorted(
+        chip.text()
+        for card in page._cards
+        for chip in card.findChildren(QLabel, "gunChannel")
+    )
+    assert texts == ["B站", "youtube", "抖音"]
 
 
 def test_render_first_page_only(page: GunCodePage) -> None:

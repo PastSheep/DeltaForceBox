@@ -56,8 +56,6 @@ FETCH_TIMEOUT = 15
 _USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DeltaForceBox/2.0"
 
 # 主播平台：channel 值 -> 展示名
-CHANNEL_NAMES = {"douyin": "抖音", "bilibili": "B站"}
-
 # 方案对象内的枪械信息键（armsDetail 可能内嵌枪名，缺失时用全局映射补）
 _TAG_RE = re.compile(r"<[^>]+>")
 _RSC_PUSH_RE = re.compile(r'self\.__next_f\.push\(\[1,\s*"((?:[^"\\]|\\.)*)"\]\)')

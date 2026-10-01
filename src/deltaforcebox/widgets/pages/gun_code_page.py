@@ -34,7 +34,6 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.gun_solutions import (
-    CHANNEL_NAMES,
     GunSolution,
     avatar_image_path,
     cache_is_fresh,
@@ -54,6 +53,12 @@ CARD_HEIGHT = 320
 MIN_CARD_WIDTH = 220
 MAX_CARD_WIDTH = 300
 GRID_PADDING = 12
+
+# 平台标识 -> i18n key（徽标文案走 zh.json，未知平台回退原标识）
+_CHANNEL_KEYS = {
+    "douyin": "guncode.channel_douyin",
+    "bilibili": "guncode.channel_bilibili",
+}
 
 # 预览图区固定高度（等比缩放，黑边/留白由布局吸收）
 IMAGE_HEIGHT = 120
@@ -200,6 +205,7 @@ class GunSolutionCard(QFrame):
         solution: GunSolution,
         copied_text: str,
         no_image_text: str,
+        channel_text: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -208,6 +214,7 @@ class GunSolutionCard(QFrame):
         self.solution = solution
         self._copied_text = copied_text
         self._copy_orig_text = ""
+        self._channel_text = channel_text
 
         box = QVBoxLayout(self)
         box.setContentsMargins(12, 8, 12, 8)
@@ -242,7 +249,7 @@ class GunSolutionCard(QFrame):
         author = QLabel(solution.author)
         author.setObjectName("gunAuthor")
         author_row.addWidget(author, 1)
-        channel = CHANNEL_NAMES.get(solution.channel, solution.channel)
+        channel = self._channel_text
         if channel:
             chip = QLabel(channel)
             chip.setObjectName("gunChannel")
@@ -690,6 +697,8 @@ class GunCodePage(QWidget):
             solution,
             copied_text=self._i18n.t("guncode.copy"),
             no_image_text=self._i18n.t("guncode.no_image"),
+            channel_text=self._i18n.t(_CHANNEL_KEYS.get(solution.channel, ""))
+            or solution.channel,
         )
         # 继承当前自适应列宽（构造器默认 CARD_WIDTH，reflow 后为实际列宽；
         # 不设则翻页新建卡片会退回 260，与既有列宽不一致）
