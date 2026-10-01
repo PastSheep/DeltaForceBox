@@ -42,7 +42,6 @@ from .piece_item import SNAP_THRESHOLD, PieceItem
 from .source_dialog import SourceDialog
 
 # 与网页端一致的参数
-TARGET_CELL = 18.0  # 桌面端单块目标尺寸
 SCATTER_ROTATE_RANGE = 25.0  # 打散随机旋转 ±25°
 KNOB_RADIUS_FACTOR = 0.18
 
@@ -94,11 +93,14 @@ class PuzzlePage(QWidget):
 
         self._scene = QGraphicsScene(self)
         self._pieces: list[PieceItem] = []
+        self._snapped: set[PieceItem] = set()  # 已吸附归位的碎片集合（增量判定的唯一事实源）
         self._board_rect = QRectF()
         self._board_item = None
         self._end_item: QGraphicsPixmapItem | None = None
         self._texture: QPixmap | None = None
         self._current_image: PuzzleImage | None = None
+        self._grid_ctx: tuple | None = None  # 网格上下文（自适应采样重建路径用）
+        self._did_initial_rebuild = False  # 首显一次性重建防重标志
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 12)
@@ -176,6 +178,12 @@ class PuzzlePage(QWidget):
         """随机选图并开局（与网页端 init() 一致）。"""
         self._scene.clear()
         self._pieces = []
+        self._snapped.clear()
+        self._grid_ctx = None
+        # 重启时 view 已布局：fit_board 后 m11 即真实缩放，路径按真实尺寸采样，
+        # 置位跳过未来的首显重建；__init__ 首次调用时 view 未显示（flag 保持
+        # False），由 showEvent 在首次显示后按真实 viewport 一次性重建。
+        self._did_initial_rebuild = True if self.view.isVisible() else False
         self._end_item = None
         self.author_label.setText("")
         self.author_label.hide()
@@ -190,11 +198,16 @@ class PuzzlePage(QWidget):
             # 与网页端一致：先归一化到高=100 的 viewBox 比例，再计算网格
             h_base = 100.0
             w_base = (img_w / img_h) * h_base
-            rows, cols, cell_w, cell_h = compute_grid_dynamic(w_base, h_base, TARGET_CELL)
+            rows, cols, cell_w, cell_h = compute_grid_dynamic(w_base, h_base)
             grid_w = cols * cell_w
             grid_h = rows * cell_h
             self._board_rect = QRectF(0, 0, grid_w, grid_h)
             self._scene.setSceneRect(self._board_rect)
+            # 先 fit_board 再取真实缩放：自适应采样按当前 view 缩放与设备像素比
+            # 决定圆弧折线密度（__init__ 时 view 未布局，此处为默认值，首显重建修正）
+            self.view.fit_board()
+            scale = self.view.transform().m11()
+            dpr = self.view.devicePixelRatioF()
 
             texture, unit_scale = make_grid_texture(image, grid_w, grid_h)
             self._texture = texture
@@ -205,12 +218,14 @@ class PuzzlePage(QWidget):
             h_knobs, v_knobs = create_knobs(rows, cols)
             h_styles, v_styles = create_knob_styles(rows, cols)
             knob_r = min(cell_w, cell_h) * KNOB_RADIUS_FACTOR
+            self._grid_ctx = (rows, cols, cell_w, cell_h, h_knobs, v_knobs, h_styles, v_styles)
 
             for r in range(rows):
                 for c in range(cols):
                     path = build_piece_path(
                         r, c, cell_w, cell_h, rows, cols,
                         h_knobs, v_knobs, h_styles, v_styles,
+                        scale=scale, dpr=dpr,
                     )
                     brush = texture_brush(texture, c, r, cell_w, cell_h, unit_scale)
                     origin = QPointF(c * cell_w, r * cell_h)
@@ -222,10 +237,35 @@ class PuzzlePage(QWidget):
                     self._pieces.append(piece)
                     self._scatter_piece(piece, c, r, cell_w, cell_h, knob_r, grid_w, grid_h)
 
-            self.view.fit_board()
         except (FileNotFoundError, OSError) as exc:
             self.author_label.setText(f"加载失败：{exc}")
             self.author_label.show()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # 首次显示后一次性重建路径：__init__ 时 view 尚未布局，采样用的
+        # scale/dpr 是默认值；首显后 fit_board 已按真实 viewport 生效，
+        # 用真实缩放重建保证像素级平滑。仅一次（防最小化恢复等重复触发）。
+        if not self._did_initial_rebuild:
+            self._did_initial_rebuild = True
+            QTimer.singleShot(0, self._rebuild_piece_paths)
+
+    def _rebuild_piece_paths(self) -> None:
+        """按当前 view 真实缩放与设备像素比重建全部碎片路径（首显一次性）。"""
+        if not self._pieces or self._grid_ctx is None:
+            return
+        self.view.fit_board()
+        scale = self.view.transform().m11()
+        dpr = self.view.devicePixelRatioF()
+        rows, cols, cell_w, cell_h, h_knobs, v_knobs, h_styles, v_styles = self._grid_ctx
+        for i, piece in enumerate(self._pieces):
+            r, c = divmod(i, cols)
+            path = build_piece_path(
+                r, c, cell_w, cell_h, rows, cols,
+                h_knobs, v_knobs, h_styles, v_styles,
+                scale=scale, dpr=dpr,
+            )
+            piece.set_path(path)
 
     def _image_size(self, image: PuzzleImage) -> tuple[int, int]:
         # 用 QImage 探测实际像素尺寸（对应网页端自然宽高）
@@ -285,11 +325,13 @@ class PuzzlePage(QWidget):
 
     # ── 计时器 ────────────────────────────────────────────
 
-    def _on_piece_picked(self, _piece: PieceItem) -> None:
-        """第一次拿起碎片时开始计时（后续拿起不再重置）。"""
+    def _on_piece_picked(self, piece: PieceItem) -> None:
+        """第一次拿起碎片时开始计时；拿起已吸附块时解除吸附计数。"""
         if not self._elapsed.isValid():
             self._elapsed.start()
             self._timer.start()
+        # 拿起已吸附归位的碎片 → 移出集合（增量判定 O(1)）
+        self._snapped.discard(piece)
 
     def _update_timer_label(self) -> None:
         self.timer_label.setText(format_time(self._elapsed.elapsed() / 1000.0))
@@ -308,21 +350,24 @@ class PuzzlePage(QWidget):
     # ── 交互与完成判定 ────────────────────────────────────
 
     def _on_piece_released(self, piece: PieceItem) -> None:
-        """释放后判定吸附与完成（对齐网页 onRelease + checkSolved）。"""
+        """释放后判定吸附；完成判定推迟到吸附动画结束后（O(1) 增量维护）。"""
         dx = piece.pos().x() - piece.target_pos().x()
         dy = piece.pos().y() - piece.target_pos().y()
         if abs(dx) < SNAP_THRESHOLD and abs(dy) < SNAP_THRESHOLD:
             anim = piece.snap_to_target()
             anim.start()
             piece.setZValue(1)  # 已放置层（圆角呈现）
+            self._snapped.add(piece)  # 集合幂等，无计数漂移
             anim.finished.connect(lambda p=piece: self._after_snap(p))
         else:
             piece.setZValue(2)
-        self._check_solved()
 
     def _after_snap(self, piece: PieceItem) -> None:
+        """吸附动画结束（碎片已归位）后才做最终判定，避免动画中途弹完成图。"""
         piece.setRotation(0.0)
-        self._check_solved()
+        # 增量判定：仅当所有碎片都已吸附（集合大小 O(1) 比较）时全量确认一次
+        if len(self._snapped) == len(self._pieces) and self._end_item is None:
+            self._check_solved()
 
     def _check_solved(self) -> None:
         """全部碎片偏移总和 < 1 即完成（对齐网页端）。"""

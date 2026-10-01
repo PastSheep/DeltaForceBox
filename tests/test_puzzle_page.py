@@ -56,6 +56,58 @@ def test_force_solve_triggers_complete(page):
     assert "©" in page.author_label.text()
 
 
+def test_snap_tracking_incremental(page):
+    """释放吸附加入集合、拿起已吸附块解除（O(1) 增量维护）。"""
+    n = len(page._pieces)
+    p = page._pieces[0]
+    p.setPos(p.target_pos())
+    page._on_piece_released(p)
+    assert len(page._snapped) == 1
+    # 拿起已吸附块 → 解除
+    page._on_piece_picked(p)
+    assert len(page._snapped) == 0
+    # 拿起后再次释放吸附 → 重新加入
+    p.setPos(p.target_pos())
+    page._on_piece_released(p)
+    assert len(page._snapped) == 1
+    assert n >= 1
+
+
+def test_snap_set_idempotent(page):
+    """重复释放同一块不重复计数（集合幂等）。"""
+    p = page._pieces[0]
+    p.setPos(p.target_pos())
+    page._on_piece_released(p)
+    page._on_piece_released(p)
+    assert len(page._snapped) == 1
+
+
+def test_complete_fires_after_last_snap_animation(page):
+    """全部碎片吸附后，完成判定推迟到最后一块动画结束（不中途弹完成图）。"""
+    n = len(page._pieces)
+    for p in page._pieces:
+        p.setPos(p.target_pos())
+        page._on_piece_released(p)
+    assert len(page._snapped) == n
+    assert page._end_item is None  # 动画均未结束，尚未判定
+    page._after_snap(page._pieces[-1])  # 最后一块动画 finished
+    assert page._end_item is not None
+    assert "©" in page.author_label.text()
+
+
+def test_picking_snapped_piece_prevents_complete(page):
+    """拿起已吸附块后（即使其 snap 动画结束）不触发完成。"""
+    n = len(page._pieces)
+    p = page._pieces[0]
+    for piece in page._pieces:
+        piece.setPos(piece.target_pos())
+        page._on_piece_released(piece)
+    page._on_piece_picked(p)  # 拿起已吸附块
+    page._after_snap(p)  # 该块 snap 动画仍会结束（动画未被打断）
+    assert len(page._snapped) == n - 1
+    assert page._end_item is None
+
+
 def test_restart_rebuilds(page):
     """重新开始后碎片重建且都在场景中。"""
     page.start_new()

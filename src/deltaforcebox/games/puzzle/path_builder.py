@@ -5,6 +5,8 @@
 - 凸凹基础形状为半径受限的半圆（SVG A 圆弧），Qt 用逐点折线等价绘制；
 - 每段 90° 弧再以「cusp-顶点」连线（弦）为轴镜像翻转：cusp 根部变平滑，
   两段弧在原平滑顶点处汇合成 ~179° 超锐利尖角——即"尖角凸凹"观感。
+- 采样步长为自适应：按弦高误差目标（设备像素）动态决定，低缩放少点、
+  高缩放密点，保证像素级平滑的同时最小化路径元素。
 """
 
 from __future__ import annotations
@@ -19,11 +21,27 @@ __all__ = ["build_piece_path", "KNOB_RADIUS_FACTOR", "KNOB_MAX_FACTOR"]
 KNOB_RADIUS_FACTOR = 0.18  # 凸凹半径 = min(cell_w, cell_h) * 0.18
 KNOB_MAX_FACTOR = 0.35  # 半径上限 = 边长 * 0.35
 
-# 圆弧采样步长：2°/段。不用三次贝塞尔，因为 QPainter 对贝塞尔路径的
-# 内部细分阈值约 0.25 逻辑单位——半径 3.6 单位的半圆只会被切分成
-# 4~5 段（约 45°/段），经视图放大后轮廓呈明显的折角梯形；改为逐点
-# lineTo 折线后 Qt 不再做二次细分，任何放大级别下视觉都与圆弧一致。
-_ARC_STEP_DEG = 2.0
+# 自适应采样参数：允许的最大弦高误差（设备像素）。0.5px 静止几乎不可见，
+# 拖拽/旋转动画下如需更严可调小（如 0.25）。不用固定角度步长——低缩放时
+# 大量采样点会落在同一像素内纯属浪费，高缩放时又可能不够平滑。
+_ARC_EPS_PX = 0.5
+# 采样段数上下限：下限防退化（点数过少形状走样），上限防高缩放点数爆炸
+_ARC_MIN_SEG = 4
+_ARC_MAX_SEG = 120
+
+
+def _arc_segments(span_rad: float, r: float, scale: float, dpr: float) -> int:
+    """按弦高误差目标计算一段弧的折线采样段数。
+
+    弦高误差 ≈ r·(Δθ)²/8 ≤ ε/(scale·dpr) → Δθ ≈ sqrt(8ε/(r·scale·dpr))。
+    scale 为 view 缩放（逻辑单位 → 设备像素倍率），dpr 为设备像素比。
+    """
+    eff = r * scale * dpr
+    if eff <= 0.0:
+        return _ARC_MIN_SEG
+    step = math.sqrt(8.0 * _ARC_EPS_PX / eff)
+    n = math.ceil(span_rad / step)
+    return max(_ARC_MIN_SEG, min(_ARC_MAX_SEG, n))
 
 
 def _mirror(
@@ -47,11 +65,13 @@ def _arc_fit(
     cx: float,
     cy: float,
     mirror_axis: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> None:
-    """按 2° 步长采样圆心 (cx,cy)、半径 r、从 (x1,y1) 到 (x2,y2) 的圆弧。
+    """按自适应步长采样圆心 (cx,cy)、半径 r、从 (x1,y1) 到 (x2,y2) 的圆弧。
 
-    起止点由 atan2 确定，走短弧方向；每步一个 lineTo 采样点，
-    高密度折线在任意缩放级别下视觉等于平滑圆弧。
+    起止点由 atan2 确定，走短弧方向；段数由 _arc_segments 按当前 view
+    缩放与设备像素比动态决定（像素级平滑 + 最小点数）。
 
     mirror_axis 非空时，将整段弧关于给定直线做镜像翻转：原本的
     "半圆弧"（cusp 尖角在根部、顶点平滑）翻转为"凹弧"——cusp 根部
@@ -66,7 +86,7 @@ def _arc_fit(
     while span > math.pi:
         span -= 2.0 * math.pi
 
-    n = max(2, int(math.ceil(abs(span) / math.radians(_ARC_STEP_DEG))))
+    n = _arc_segments(abs(span), r, scale, dpr)
     for i in range(1, n + 1):
         a = a1 + span * (i / n)
         px, py = cx + r * math.cos(a), cy + r * math.sin(a)
@@ -83,6 +103,8 @@ def _edge_top(
     param: float,
     radius: float,
     style: bool = False,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> None:
     """顶边（左→右）。param>0 向下凸，param<0 向上凹。
 
@@ -99,10 +121,12 @@ def _edge_top(
     _arc_fit(
         path, mx - r, y, mx, y + param * r, r, mx, y,
         mirror_axis=((mx - r, y), vt) if style else None,
+        scale=scale, dpr=dpr,
     )
     _arc_fit(
         path, mx, y + param * r, mx + r, y, r, mx, y,
         mirror_axis=(vt, (mx + r, y)) if style else None,
+        scale=scale, dpr=dpr,
     )
     path.lineTo(x + w, y)
 
@@ -115,6 +139,8 @@ def _edge_bottom(
     param: float,
     radius: float,
     style: bool = False,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> None:
     """底边（右→左，行进方向与顶边相反）。param>0 向下凸，param<0 向上凹。"""
     if param == 0:
@@ -127,10 +153,12 @@ def _edge_bottom(
     _arc_fit(
         path, mx + r, y, mx, y + param * r, r, mx, y,
         mirror_axis=((mx + r, y), vt) if style else None,
+        scale=scale, dpr=dpr,
     )
     _arc_fit(
         path, mx, y + param * r, mx - r, y, r, mx, y,
         mirror_axis=(vt, (mx - r, y)) if style else None,
+        scale=scale, dpr=dpr,
     )
     path.lineTo(x, y)
 
@@ -143,6 +171,8 @@ def _edge_right(
     param: float,
     radius: float,
     style: bool = False,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> None:
     """右边（上→下）。param>0 向右凸，param<0 向左凹。"""
     if param == 0:
@@ -155,10 +185,12 @@ def _edge_right(
     _arc_fit(
         path, x, my - r, x + param * r, my, r, x, my,
         mirror_axis=((x, my - r), vt) if style else None,
+        scale=scale, dpr=dpr,
     )
     _arc_fit(
         path, x + param * r, my, x, my + r, r, x, my,
         mirror_axis=(vt, (x, my + r)) if style else None,
+        scale=scale, dpr=dpr,
     )
     path.lineTo(x, y + h)
 
@@ -171,6 +203,8 @@ def _edge_left(
     param: float,
     radius: float,
     style: bool = False,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> None:
     """左边（下→上，行进方向与右边相反）。param<0 向左凸，param>0 向右凹。"""
     if param == 0:
@@ -183,10 +217,12 @@ def _edge_left(
     _arc_fit(
         path, x, my + r, x + param * r, my, r, x, my,
         mirror_axis=((x, my + r), vt) if style else None,
+        scale=scale, dpr=dpr,
     )
     _arc_fit(
         path, x + param * r, my, x, my - r, r, x, my,
         mirror_axis=(vt, (x, my - r)) if style else None,
+        scale=scale, dpr=dpr,
     )
     path.lineTo(x, y)
 
@@ -202,6 +238,8 @@ def build_piece_path(
     v_knobs: list[list[int]],
     h_styles: list[list[int]] | None = None,
     v_styles: list[list[int]] | None = None,
+    scale: float = 1.0,
+    dpr: float = 1.0,
 ) -> QPainterPath:
     """构建第 (r, c) 块碎片的完整路径（与网页端几何一致）。
 
@@ -209,6 +247,9 @@ def build_piece_path(
 
     h_styles/v_styles 为可选样式矩阵（与 h_knobs/v_knobs 同形状）：
     0=半圆凸凹（网页版原始），1=尖角凸凹（弧镜像翻转）；缺省时全部为半圆。
+
+    scale/dpr 用于自适应圆弧采样：view 缩放 × 设备像素比决定每段弧的
+    折线段数，保证像素级平滑的同时最小化路径元素。
     """
     x = c * cell_w
     y = r * cell_h
@@ -236,9 +277,9 @@ def build_piece_path(
 
     path = QPainterPath()
     path.moveTo(x, y)
-    _edge_top(path, x, y, w, top_param, radius, top_style)
-    _edge_right(path, x + w, y, h, right_param, radius, right_style)
-    _edge_bottom(path, x, y + h, w, bottom_param, radius, bottom_style)
-    _edge_left(path, x, y, h, left_param, radius, left_style)
+    _edge_top(path, x, y, w, top_param, radius, top_style, scale, dpr)
+    _edge_right(path, x + w, y, h, right_param, radius, right_style, scale, dpr)
+    _edge_bottom(path, x, y + h, w, bottom_param, radius, bottom_style, scale, dpr)
+    _edge_left(path, x, y, h, left_param, radius, left_style, scale, dpr)
     path.closeSubpath()
     return path
