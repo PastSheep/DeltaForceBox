@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltaforcebox"
-version = "Beta-3.1"
+version = "Beta-3.2"
 description = "鼠鼠大王工具箱"
 readme = "README.md"
 requires-python = ">=3.12"
