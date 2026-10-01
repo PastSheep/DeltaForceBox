@@ -27,7 +27,7 @@ def build_app(
     运行中发生变更时自动写回；settings_path 供测试注入临时文件。
     """
     app = QApplication.instance() or QApplication(argv or [])
-    app.setApplicationName("Delta Force Box")
+    app.setApplicationName("鼠鼠大王工具箱")
     # 显示名置空：避免 Windows 在窗口标题为空时回退显示应用名，
     # 使原生标题栏真正无文字（任务栏标签随之显示应用名以外内容）
     app.setApplicationDisplayName("")

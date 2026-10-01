@@ -1,4 +1,4 @@
-"""三角洲行动工具箱（Delta Force Box）程序入口。
+"""鼠鼠大王工具箱程序入口。
 
 用法：
     python -m deltaforcebox.main

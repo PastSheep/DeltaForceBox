@@ -27,7 +27,7 @@ from ..games.puzzle.puzzle_page import PuzzlePage
 from .pages.home_page import HomePage
 from .pages.settings_page import SettingsPage
 
-# 侧边栏可调宽度边界（最小宽度需容纳标题“三角洲行动工具箱”完整显示）
+# 侧边栏可调宽度边界（最小宽度需容纳标题“鼠鼠大王工具箱”完整显示）
 SIDEBAR_MIN_WIDTH = 160
 SIDEBAR_MAX_WIDTH = 420
 SIDEBAR_INITIAL_WIDTH = 190
