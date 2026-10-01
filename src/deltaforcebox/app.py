@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmapCache
 from PySide6.QtWidgets import QApplication
 
 from .core.daily_password import normalize_source_order
@@ -54,11 +54,18 @@ def build_app(
 
     puzzle_pieces = settings.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES)
     password_sources = normalize_source_order(settings.get("password_source_order"))
+    gun_sync_interval_days = int(settings.get("gun_sync_interval_days", 10))
+    gun_render_page_size = int(settings.get("gun_render_page_size", 20))
+    # 改枪码图片内存缓存上限（MB）：全局 LRU，仅配置文件修改
+    image_cache_limit_mb = int(settings.get("image_cache_limit_mb", 64))
+    QPixmapCache.setCacheLimit(max(0, image_cache_limit_mb) * 1024)
     window = MainWindow(
         i18n,
         theme,
         puzzle_pieces=puzzle_pieces,
         password_sources=password_sources,
+        gun_sync_interval_days=gun_sync_interval_days,
+        gun_render_page_size=gun_render_page_size,
         settings_path=settings_path,
     )
     return app, window

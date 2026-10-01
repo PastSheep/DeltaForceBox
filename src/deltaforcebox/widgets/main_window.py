@@ -27,6 +27,7 @@ from ..core.i18n import I18nManager
 from ..core.theme import ThemeManager
 from ..games.puzzle.puzzle_page import PuzzlePage
 from .pages.daily_password_page import DailyPasswordPage
+from .pages.gun_code_page import GunCodePage
 from .pages.home_page import HomePage
 from .pages.settings_page import SettingsPage
 
@@ -35,12 +36,20 @@ SIDEBAR_MIN_WIDTH = 160
 SIDEBAR_MAX_WIDTH = 420
 SIDEBAR_INITIAL_WIDTH = 190
 
-# 侧边栏条目结构：(页面标识, i18n key, 子条目((子key, 子i18n key), ...))
+# 侧边栏条目结构：(页面标识, i18n key, 子条目)
+# 子条目为 (key, i18n key) 二元组（叶子页）或 (key, i18n key, 孙条目) 三元组（子分组）
 # 有子条目的为可展开分组，无子条目的为直接导航的一级项
 SIDEBAR_ITEMS = (
     ("home", "sidebar.home", ()),
     ("games", "sidebar.games", (("puzzle", "sidebar.puzzle"),)),
-    ("tools", "sidebar.tools", (("daily_password", "sidebar.daily_password"),)),
+    (
+        "tools",
+        "sidebar.tools",
+        (
+            ("daily_password", "sidebar.daily_password"),
+            ("gun_code", "sidebar.gun_code", (("anchor", "sidebar.anchor"),)),
+        ),
+    ),
     ("settings", "sidebar.settings", ()),
 )
 
@@ -83,6 +92,8 @@ class MainWindow(QMainWindow):
         theme: ThemeManager,
         puzzle_pieces: int = 48,
         password_sources: tuple[str, ...] | None = None,
+        gun_sync_interval_days: int = 10,
+        gun_render_page_size: int = 20,
         settings_path: Path | None = None,
     ) -> None:
         super().__init__()
@@ -90,6 +101,8 @@ class MainWindow(QMainWindow):
         self._theme = theme
         self._puzzle_pieces = puzzle_pieces
         self._password_sources = password_sources
+        self._gun_sync_interval_days = gun_sync_interval_days
+        self._gun_render_page_size = gun_render_page_size
         self._settings_path = settings_path
 
         central = QWidget()
@@ -125,6 +138,12 @@ class MainWindow(QMainWindow):
                 i18n,
                 theme,
                 source_order=self._password_sources,
+            ),
+            "anchor": GunCodePage(
+                i18n,
+                theme,
+                sync_interval_days=self._gun_sync_interval_days,
+                render_page_size=self._gun_render_page_size,
             ),
             "settings": SettingsPage(i18n, theme, settings_path=self._settings_path),
         }
@@ -181,40 +200,71 @@ class MainWindow(QMainWindow):
     # ── 侧边栏构建 ─────────────────────────────────────────
 
     def _populate_sidebar(self) -> None:
-        """重建侧边栏树；分组默认展开，分组项不可选中（避免抢占高亮）。"""
+        """重建侧边栏树；分组默认展开，分组项不可选中（避免抢占高亮）。
+
+        支持两级分组：一级分组下可挂子分组（如 鼠鼠工具 > 改枪码 > 主播推荐）。
+        """
         self.sidebar.blockSignals(True)
         self.sidebar.clear()
         for key, text_key, children in SIDEBAR_ITEMS:
             item = QTreeWidgetItem([self._i18n.t(text_key)])
             item.setData(0, Qt.ItemDataRole.UserRole, key)
-            for child_key, child_text_key in children:
-                child = QTreeWidgetItem([self._i18n.t(child_text_key)])
-                child.setData(0, Qt.ItemDataRole.UserRole, child_key)
-                item.addChild(child)
+            self._add_sidebar_children(item, children)
             if children:
-                # 分组项：不参与选中，颜色弱化、字号略小，带 chevron
-                item.setData(0, GROUP_ROLE, "group")
-                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-                font = item.font(0)
-                font.setPointSize(11)
-                item.setFont(0, font)
-                item.setIcon(0, _chevron_icon(True))
+                self._mark_group(item, level=1)
             self.sidebar.addTopLevelItem(item)
-            if children:
-                # 展开状态需在条目入树后设置才生效
-                item.setExpanded(True)
+            # 分组默认收起（用户点击展开；对齐 shushu.fan 下拉式侧栏）
         self.sidebar.blockSignals(False)
         self._refresh_group_style()
+
+    def _add_sidebar_children(
+        self, parent: QTreeWidgetItem, children: tuple[object, ...]
+    ) -> None:
+        """递归添加子条目：二元组为叶子页，三元组为子分组。"""
+        for child in children:
+            if len(child) == 3:
+                sub_key, sub_text, sub_children = child  # type: ignore[misc]
+                node = QTreeWidgetItem([self._i18n.t(sub_text)])
+                node.setData(0, Qt.ItemDataRole.UserRole, sub_key)
+                self._add_sidebar_children(node, sub_children)
+                self._mark_group(node, level=2)
+                parent.addChild(node)
+            else:
+                child_key, child_text = child  # type: ignore[misc]
+                node = QTreeWidgetItem([self._i18n.t(child_text)])
+                node.setData(0, Qt.ItemDataRole.UserRole, child_key)
+                parent.addChild(node)
+
+    GROUP_FONT_SIZES = {1: 12, 2: 10}  # 一级/二级分组字号（标签页统一默认字号）
+
+    def _mark_group(self, item: QTreeWidgetItem, level: int = 1) -> None:
+        """把条目标记为分组：不可选中、弱化字号、自绘 chevron。
+
+        一级分组与二级分组使用不同字号；具体标签页不设字号（全局统一）。
+        """
+        item.setData(0, GROUP_ROLE, "group")
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        font = item.font(0)
+        font.setPointSize(self.GROUP_FONT_SIZES.get(level, 11))
+        item.setFont(0, font)
+        item.setIcon(0, _chevron_icon(False))  # 分组默认收起
 
     def _refresh_group_style(self, _theme: str | None = None) -> None:
         """按当前主题刷新分组项前景色（QSS 无法区分分组与普通项）。"""
         color = QColor(GROUP_COLORS.get(self._theme.theme(), "#8b93a1"))
+
+        def _apply(item: QTreeWidgetItem) -> None:
+            for i in range(item.childCount()):
+                child = item.child(i)
+                if child.data(0, GROUP_ROLE) == "group":
+                    child.setForeground(0, color)
+                _apply(child)
+
         for i in range(self.sidebar.topLevelItemCount()):
             item = self.sidebar.topLevelItem(i)
             if item.data(0, GROUP_ROLE) == "group":
                 item.setForeground(0, color)
-                for j in range(item.childCount()):
-                    item.child(j).setForeground(0, color)
+            _apply(item)
 
     def _set_group_icon(self, item: QTreeWidgetItem, expanded: bool) -> None:
         if item.childCount() > 0:
@@ -241,15 +291,21 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.pages[key])
 
     def _find_item_by_key(self, key: str) -> QTreeWidgetItem | None:
-        """按页面标识查找侧栏条目（含分组内子项）。"""
-        for i in range(self.sidebar.topLevelItemCount()):
-            item = self.sidebar.topLevelItem(i)
+        """按页面标识查找侧栏条目（递归，含分组内子项）。"""
+
+        def _search(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
             if item.data(0, Qt.ItemDataRole.UserRole) == key:
                 return item
-            for j in range(item.childCount()):
-                child = item.child(j)
-                if child.data(0, Qt.ItemDataRole.UserRole) == key:
-                    return child
+            for i in range(item.childCount()):
+                found = _search(item.child(i))
+                if found is not None:
+                    return found
+            return None
+
+        for i in range(self.sidebar.topLevelItemCount()):
+            found = _search(self.sidebar.topLevelItem(i))
+            if found is not None:
+                return found
         return None
 
     def _on_password_source_changed(self, order: object) -> None:
@@ -257,6 +313,14 @@ class MainWindow(QMainWindow):
         page = self.pages.get("daily_password")
         if page is not None:
             page.set_source_order(tuple(order))  # type: ignore[arg-type]
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        """关闭窗口前收尾各页面的后台线程（QThread 运行时被回收会崩溃）。"""
+        for page in self.pages.values():
+            close = getattr(page, "_shutdown", None)
+            if callable(close):
+                close()
+        super().closeEvent(event)
 
     def retranslate(self) -> None:
         # 系统标题栏文本保持隐藏，不随语言/文案变化
@@ -271,6 +335,13 @@ class MainWindow(QMainWindow):
         self._populate_sidebar()
         item = self._find_item_by_key(current_key) or self._find_item_by_key("home")
         if item is not None:
+            # 若所在分组当前收起，先展开父链保证选中项可见
+            parent = item.parent()
+            while parent is not None:
+                if not parent.isExpanded():
+                    parent.setExpanded(True)
+                    self._set_group_icon(parent, True)
+                parent = parent.parent()
             self.sidebar.setCurrentItem(item)
         for page in self.pages.values():
             page.retranslate()

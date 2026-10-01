@@ -126,3 +126,45 @@ def test_settings_page_source_combo_repersists(qapp, tmp_path):
     page.source_combo.setCurrentIndex(page.source_combo.findData("shushu_fan"))
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["password_source_order"] == ["shushu_fan", "tmini"]
+
+
+# ── 改枪码图片内存缓存上限（仅配置文件） ──────────────
+
+def test_image_cache_limit_default_in_settings():
+    assert DEFAULT_SETTINGS["image_cache_limit_mb"] == 64
+
+
+def test_build_app_sets_pixmap_cache_limit(qapp, tmp_path):
+    from PySide6.QtGui import QPixmapCache
+
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "dark", "language": "zh", "image_cache_limit_mb": 128},
+        path,
+    )
+    _app, _window = build_app(settings_path=path)
+    assert QPixmapCache.cacheLimit() == 128 * 1024  # MB -> KB
+
+
+def test_build_app_pixmap_cache_zero_disables(qapp, tmp_path):
+    from PySide6.QtGui import QPixmapCache
+
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "dark", "language": "zh", "image_cache_limit_mb": 0},
+        path,
+    )
+    _app, _window = build_app(settings_path=path)
+    assert QPixmapCache.cacheLimit() == 0
+
+
+# ── 改枪码每页卡片数（仅配置文件） ──────────────────
+
+def test_build_app_passes_render_page_size(qapp, tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(
+        {"theme": "dark", "language": "zh", "gun_render_page_size": 25},
+        path,
+    )
+    _app, window = build_app(settings_path=path)
+    assert window.pages["anchor"]._page_size == 25
