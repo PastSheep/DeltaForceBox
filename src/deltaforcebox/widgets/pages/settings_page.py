@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
 
 from ...core.daily_password import normalize_source_order
@@ -19,6 +20,9 @@ PASSWORD_SOURCE_ITEMS = ("tmini", "shushu_fan")
 
 
 class SettingsPage(QWidget):
+    # 首选来源变更后发出（携带重排后的完整顺序），供主窗口实时更新每日密码页
+    password_source_changed = Signal(object)
+
     def __init__(
         self,
         i18n: I18nManager,
@@ -90,6 +94,8 @@ class SettingsPage(QWidget):
         order = [name] + [s for s in order if s != name]
         settings["password_source_order"] = order
         save_settings(settings, self._settings_path)
+        # 通知主窗口实时更新每日密码页来源顺序（无需重启）
+        self.password_source_changed.emit(tuple(order))
 
     def _refresh_theme_combo(self) -> None:
         self.theme_combo.blockSignals(True)

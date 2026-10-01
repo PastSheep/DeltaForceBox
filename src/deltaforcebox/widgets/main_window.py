@@ -160,6 +160,10 @@ class MainWindow(QMainWindow):
         i18n.changed.connect(lambda _: self.retranslate())
         theme.changed.connect(self._refresh_group_style)
         theme.changed.connect(lambda _: self._apply_title_bar_theme())
+        # 设置页修改来源优先级后实时同步每日密码页（无需重启）
+        self.pages["settings"].password_source_changed.connect(
+            self._on_password_source_changed
+        )
         # 不显示系统标题栏文本（保留最小化/关闭按钮，品牌名见侧栏顶部）
         self.setWindowTitle("")
         self.retranslate()
@@ -247,6 +251,12 @@ class MainWindow(QMainWindow):
                 if child.data(0, Qt.ItemDataRole.UserRole) == key:
                     return child
         return None
+
+    def _on_password_source_changed(self, order: object) -> None:
+        """设置页来源优先级变更：实时更新每日密码页顺序并立即重新拉取。"""
+        page = self.pages.get("daily_password")
+        if page is not None:
+            page.set_source_order(tuple(order))  # type: ignore[arg-type]
 
     def retranslate(self) -> None:
         # 系统标题栏文本保持隐藏，不随语言/文案变化

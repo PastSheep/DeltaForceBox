@@ -181,6 +181,19 @@ QFrame#pwdCard {
 QFrame#pwdCard:hover {
     border-color: #2d6cdf;
 }
+QWidget#pwdPreview {
+    background-color: #ffffff;
+    border: 1px solid #e0e4ea;
+    border-radius: 10px;
+}
+QLabel#pwdPreviewTitle {
+    color: #2c3e50;
+    font-weight: 600;
+}
+QLabel#pwdPreviewImage {
+    border-radius: 6px;
+    background-color: #000000;
+}
 QLabel#pwdTitle {
     color: #2c3e50;
     font-weight: 600;

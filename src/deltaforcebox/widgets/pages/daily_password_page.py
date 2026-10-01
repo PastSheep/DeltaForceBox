@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QWidgetItem,
 )
+from shiboken6 import isValid as _shiboken_is_valid
 
 from ...core.daily_password import (
     DEFAULT_SOURCE_ORDER,
@@ -45,12 +47,40 @@ from ...core.theme import ThemeManager
 # 地图缩略图目录（scripts/prepare_map_thumbs.py 预处理产物，640×360 黑边填充）
 MAP_IMAGE_DIR = RESOURCES_DIR / "images" / "daily_password"
 
+# 位置描述本地资源：密码房位置是静态信息，直接内置，无需依赖数据源提供
+# （tmini 源实时描述优先，缺失时回退本地资源）
+_LOCATIONS_FILE = RESOURCES_DIR / "daily_password_locations.json"
+LOCAL_LOCATIONS: dict[str, str] = {}
+if _LOCATIONS_FILE.exists():
+    try:
+        LOCAL_LOCATIONS = {
+            str(k): str(v)
+            for k, v in json.loads(_LOCATIONS_FILE.read_text(encoding="utf-8")).items()
+            if v
+        }
+    except (OSError, ValueError):
+        LOCAL_LOCATIONS = {}
+
+
+def _normalize_map_name(name: str) -> str:
+    """地图名归一化：兼容 "AZ3核电站"（tmini 命名）与本地资源 key "AZ3"。"""
+    return name.replace("核电站", "")
+
+
+def _map_location(name: str, from_source: str) -> str:
+    """位置描述：数据源实时描述优先，缺失时回退本地静态资源。"""
+    return from_source or LOCAL_LOCATIONS.get(_normalize_map_name(name), "")
+
 # 卡片尺寸范围：宽度随视口自适应伸缩（填满每行），高度固定保证等高
 CARD_WIDTH = 240   # 默认宽度（首次渲染/兜底）
 CARD_HEIGHT = 252
 MIN_CARD_WIDTH = 200  # 宽度下限：低于则减少每行列数
 MAX_CARD_WIDTH = 280  # 宽度上限：窄窗口（1-2 列）时避免过宽
 GRID_PADDING = 12     # 卡片间距
+
+# 地图显示顺序（固定）：不同数据源返回顺序可能不同，渲染一律按此顺序，
+# 避免同一张图在不同来源下位置跳动；卡片标题也用这里的标准名。
+MAP_ORDER = ("零号大坝", "长弓溪谷", "巴克什", "航天基地", "潮汐监狱", "AZ3")
 
 # 图片区固定高度；宽最大按 16:9（黑边图，轻微拉伸由黑边吸收）
 IMAGE_HEIGHT = 100
@@ -104,7 +134,10 @@ class PasswordCard(QFrame):
 
     固定尺寸（与骇爪美图来源窗口一致），描述区固定高度、全文可滚动，
     保证所有卡片等高、布局统一；列表按可用宽度自适应每行卡片数。
+    左键点击卡片触发 clicked（用于弹出大图预览）。
     """
+
+    clicked = Signal(object)  # 参数：卡片自身
 
     def __init__(
         self,
@@ -113,11 +146,16 @@ class PasswordCard(QFrame):
         location: str,
         pixmap: QPixmap | None,
         no_loc_text: str,
+        image_path: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("pwdCard")
         self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self.name = name
+        self.code = code
+        self.image_path = image_path
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         box = QVBoxLayout(self)
         box.setContentsMargins(12, 8, 12, 8)
         box.setSpacing(5)
@@ -153,6 +191,72 @@ class PasswordCard(QFrame):
         box.addWidget(code_label)
         box.addWidget(self.desc_scroll)
         box.addStretch(1)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self)
+            event.accept()
+        super().mousePressEvent(event)
+
+
+class _PreviewWindow(QWidget):
+    """点击卡片弹出的大图预览悬浮窗。
+
+    无边框、置顶、非模态；显示地图名 + 密码 + 原始尺寸大图，
+    点击窗口任意位置即关闭（WA_DeleteOnClose 自动销毁）。
+    打开状态下可被页面复用（update_content 替换标题与图片）。
+    """
+
+    def __init__(self, title: str, image_path: Path, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("pwdPreview")
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Dialog
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        box = QVBoxLayout(self)
+        box.setContentsMargins(16, 12, 16, 16)
+        box.setSpacing(10)
+
+        self.cap_label = QLabel()
+        self.cap_label.setObjectName("pwdPreviewTitle")
+        self.cap_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.image_label = QLabel()
+        self.image_label.setObjectName("pwdPreviewImage")
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        box.addWidget(self.cap_label)
+        box.addWidget(self.image_label)
+
+        # 窗口自身与所有子控件统一拦截鼠标按下：点击任意位置关闭
+        for w in (self, self.cap_label, self.image_label):
+            w.installEventFilter(self)
+        self.update_content(title, image_path)
+
+    def update_content(self, title: str, image_path: Path) -> None:
+        """替换窗口内容（标题 + 大图），保持窗口打开状态。"""
+        self.cap_label.setText(title)
+        pix = QPixmap(str(image_path))
+        if pix.isNull():  # 图片缺失时兜底显示占位文案
+            self.image_label.setPixmap(QPixmap())
+            self.image_label.setText("(image)")
+        else:
+            self.image_label.setText("")
+            self.image_label.setPixmap(pix)
+            self.image_label.setFixedSize(pix.size())
+        self.adjustSize()
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 - Qt 命名
+        if event.type() == QEvent.Type.MouseButtonPress:
+            self.close()
+            return True
+        return super().eventFilter(obj, event)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        self.close()
 
 
 class _FlowLayout(QLayout):
@@ -245,6 +349,7 @@ class DailyPasswordPage(QWidget):
         self._has_content = False
         # 地图缩略图内存缓存（避免重复读盘；None 表示无图）
         self._pixmap_cache: dict[str, QPixmap | None] = {}
+        self._preview: _PreviewWindow | None = None  # 大图预览悬浮窗
         # 刷新节流：拿到非今日数据或全部失败时延后重试，
         # 避免源更新滞后/网络异常导致每分钟循环请求打满上游限频
         self._throttle_until: datetime | None = None
@@ -384,11 +489,26 @@ class DailyPasswordPage(QWidget):
         self._render_data(data, stale=True)
 
     def _render_data(self, data: DailyPasswordData, stale: bool = False) -> None:
-        """渲染数据到卡片流式网格与状态行。"""
+        """渲染数据到卡片流式网格与状态行。
+
+        卡片按 MAP_ORDER 固定顺序显示（兼容源命名的后缀变体，
+        如 tmini 的 "AZ3核电站" 归一为 "AZ3"），与源返回顺序无关。
+        """
         self._clear_cards()
-        for name in data.passwords:
+        normalized = {
+            _normalize_map_name(k): (k, v) for k, v in data.passwords.items()
+        }
+        for name in MAP_ORDER:
+            entry = normalized.get(name)
+            if entry is None:
+                continue
+            actual, code = entry
             self._flow.addWidget(
-                self._build_card(name, data.passwords[name], data.locations.get(name, ""))
+                self._build_card(
+                    name,
+                    code,
+                    _map_location(actual, data.locations.get(actual, "")),
+                )
             )
         self._has_content = True
         self.empty_label.hide()
@@ -403,13 +523,17 @@ class DailyPasswordPage(QWidget):
         self.status_label.setText(" · ".join(parts))
 
     def _build_card(self, name: str, code: str, location: str) -> PasswordCard:
-        return PasswordCard(
+        path = resolve_map_image(name)
+        card = PasswordCard(
             name,
             code,
             location,
             pixmap=self._load_pixmap(name),
             no_loc_text=self._i18n.t("dailypwd.no_location"),
+            image_path=path,
         )
+        card.clicked.connect(self._show_preview)
+        return card
 
     def _load_pixmap(self, name: str) -> QPixmap | None:
         """按地图名加载缩略图（带缓存）；无对应图片返回 None。"""
@@ -420,6 +544,37 @@ class DailyPasswordPage(QWidget):
         result = pix if not pix.isNull() else None
         self._pixmap_cache[name] = result
         return result
+
+    def _show_preview(self, card: PasswordCard) -> None:
+        """点击卡片：弹出/替换大图预览悬浮窗（同一时刻仅一个窗口）。
+
+        预览已打开（未被点击关闭销毁）时复用窗口替换内容；
+        已关闭销毁则新建。窗口居中于主窗口，点击任意处关闭。
+        """
+        if card.image_path is None:
+            return
+        title = f"{card.name} · {card.code}"
+        if self._preview is not None and _shiboken_is_valid(self._preview):
+            self._preview.update_content(title, card.image_path)
+            self._preview.raise_()
+            self._preview.activateWindow()
+            return
+        self._preview = _PreviewWindow(title, card.image_path, self)
+        self._preview.show()
+        center = self.window().frameGeometry().center()
+        self._preview.move(
+            center - QPoint(self._preview.width() // 2, self._preview.height() // 2)
+        )
+
+    def set_source_order(self, order: tuple[str, ...] | None) -> None:
+        """运行时更新来源优先级（设置页修改后实时同步，无需重启）。
+
+        仅更新顺序，不立即拉取：下次手动刷新/跨日刷新时按新顺序请求。
+        """
+        new_order = tuple(order) if order else DEFAULT_SOURCE_ORDER
+        if new_order == self._order:
+            return
+        self._order = new_order
 
     def _clear_cards(self) -> None:
         while self._flow.count():

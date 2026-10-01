@@ -488,6 +488,240 @@ def test_card_columns_stable_across_smooth_resize(qapp, i18n_theme, tmp_path):
     assert cols_history[-1] > cols_history[0]  # 足够宽后列数确实增加
 
 
+def test_card_click_opens_large_preview(qapp, i18n_theme, tmp_path):
+    """点击卡片弹出大图预览：无边框置顶悬浮窗，显示地图名+密码。"""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    save_cache(_sample_data(), cache)
+    page = DailyPasswordPage(
+        i18n, theme, source_order=("tmini",), cache_file=cache, fetchers={"tmini": None}
+    )
+    page.resize(1100, 640)
+    page.show()
+    qapp.processEvents()
+
+    card = page._flow.itemAt(0).widget()
+    assert card.image_path is not None  # 有图地图可预览
+    assert card.cursor().shape() == Qt.CursorShape.PointingHandCursor
+
+    press = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        QPointF(5, 5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    card.mousePressEvent(press)
+    qapp.processEvents()
+    assert page._preview is not None and page._preview.isVisible()
+    assert page._preview.windowFlags() & Qt.WindowType.FramelessWindowHint
+    assert page._preview.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
+    assert not page._preview.image_label.pixmap().isNull()  # 大图已加载
+
+
+def test_preview_closes_on_click_anywhere(qapp, i18n_theme, tmp_path):
+    """点击预览窗口任意位置（含标题/图片区）均关闭（WA_DeleteOnClose 销毁）。"""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
+
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    save_cache(_sample_data(), cache)
+    page = DailyPasswordPage(
+        i18n, theme, source_order=("tmini",), cache_file=cache, fetchers={"tmini": None}
+    )
+    page.resize(1100, 640)
+    page.show()
+    qapp.processEvents()
+
+    def make_press() -> QMouseEvent:
+        return QMouseEvent(
+            QEvent.Type.MouseButtonPress,
+            QPointF(5, 5),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    # 点击卡片弹出预览（sendEvent 走真实事件分发，触发 override）
+    card = page._flow.itemAt(0).widget()
+    QApplication.sendEvent(card, make_press())
+    qapp.processEvents()
+    preview = page._preview
+    assert isValid(preview) and preview.isVisible()
+
+    # 点击图片区关闭（走 eventFilter 拦截路径），自动销毁
+    QApplication.sendEvent(preview.image_label, make_press())
+    qapp.processEvents()
+    assert not isValid(preview)
+
+    # 再次点击另一卡片重新弹出，点击窗口空白处也关闭
+    card.mousePressEvent(make_press())
+    qapp.processEvents()
+    preview2 = page._preview
+    assert isValid(preview2) and preview2.isVisible()
+    QApplication.sendEvent(preview2, make_press())
+    qapp.processEvents()
+    assert not isValid(preview2)
+
+
+def test_preview_replaces_instead_of_multiple(qapp, i18n_theme, tmp_path):
+    """预览已打开时点击其他卡片：替换同一窗口内容，不新建多个窗口。"""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
+
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    save_cache(_sample_data(), cache)
+    page = DailyPasswordPage(
+        i18n, theme, source_order=("tmini",), cache_file=cache, fetchers={"tmini": None}
+    )
+    page.resize(1100, 640)
+    page.show()
+    qapp.processEvents()
+
+    def press() -> QMouseEvent:
+        return QMouseEvent(
+            QEvent.Type.MouseButtonPress,
+            QPointF(5, 5),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    card0 = page._flow.itemAt(0).widget()  # 零号大坝
+    card1 = page._flow.itemAt(1).widget()  # 长弓溪谷
+    QApplication.sendEvent(card0, press())
+    qapp.processEvents()
+    preview = page._preview
+    assert isValid(preview) and preview.isVisible()
+    assert "零号大坝" in preview.cap_label.text()
+
+    # 预览打开时点击另一卡片：同一窗口对象，仅替换标题与图片
+    QApplication.sendEvent(card1, press())
+    qapp.processEvents()
+    assert page._preview is preview
+    assert isValid(preview) and preview.isVisible()
+    assert "长弓溪谷" in preview.cap_label.text()
+    assert not preview.image_label.pixmap().isNull()
+
+
+def test_local_location_fallback(qapp, i18n_theme, tmp_path):
+    """无描述来源（如 shushu_fan）：位置描述回退本地静态资源，不依赖网络。"""
+    from deltaforcebox.widgets.pages.daily_password_page import (
+        LOCAL_LOCATIONS,
+        MAP_ORDER,
+    )
+
+    assert LOCAL_LOCATIONS  # 本地描述资源已加载
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    data = _sample_data()
+    data.locations = {}  # 模拟数据源不提供描述
+    save_cache(data, cache)
+    page = DailyPasswordPage(
+        i18n, theme, source_order=("tmini",), cache_file=cache, fetchers={"tmini": None}
+    )
+    page.resize(1100, 640)
+    page.show()
+    qapp.processEvents()
+
+    no_loc = i18n.t("dailypwd.no_location")
+    for i in range(page._flow.count()):
+        card = page._flow.itemAt(i).widget()
+        text = card.desc_scroll.widget().text()
+        assert text and text != no_loc  # 均有描述且非占位
+        assert text == LOCAL_LOCATIONS[MAP_ORDER[i]]
+
+
+def test_card_order_fixed_across_sources(qapp, i18n_theme, tmp_path):
+    """不同源的返回顺序不影响卡片显示顺序（固定 MAP_ORDER，AZ3 变体归一）。"""
+    from deltaforcebox.widgets.pages.daily_password_page import MAP_ORDER
+
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    data = DailyPasswordData(
+        source="tmini",
+        update_date="10月02日每日密码已更新",
+        passwords={
+            "AZ3核电站": "0700",  # tmini 返回顺序：AZ3 在前
+            "潮汐监狱": "8517",
+            "零号大坝": "2581",
+            "航天基地": "2457",
+            "巴克什": "8382",
+            "长弓溪谷": "2715",
+        },
+    )
+    save_cache(data, cache)
+    page = DailyPasswordPage(
+        i18n, theme, source_order=("tmini",), cache_file=cache, fetchers={"tmini": None}
+    )
+    page.resize(1100, 640)
+    page.show()
+    qapp.processEvents()
+    assert page._flow.count() == 6
+    titles = [page._flow.itemAt(i).widget().name for i in range(page._flow.count())]
+    assert titles == list(MAP_ORDER)
+    # AZ3 变体归一并显示标准名
+    card_az3 = page._flow.itemAt(5).widget()
+    assert card_az3.name == "AZ3"
+    assert card_az3.code == "0700"
+
+
+def test_set_source_order_no_refetch(qapp, i18n_theme, tmp_path):
+    """运行时修改来源顺序：仅更新顺序不立即拉取，手动刷新时按新顺序请求。"""
+    i18n, theme = i18n_theme
+    cache = tmp_path / "cache.json"
+    save_cache(_sample_data(), cache)  # 当日缓存：构造时不触发拉取
+    calls: list[str] = []
+
+    def fake(timeout):
+        calls.append("called")
+        return _sample_data(source="shushu_fan")
+
+    page = DailyPasswordPage(
+        i18n,
+        theme,
+        source_order=("tmini",),
+        cache_file=cache,
+        fetchers={"tmini": fake, "shushu_fan": fake},
+    )
+    assert page._worker is None
+    page.set_source_order(("shushu_fan", "tmini"))
+    assert page._order == ("shushu_fan", "tmini")
+    assert page._worker is None  # 不立即拉取
+    assert not calls
+    # 用户点击刷新时按新顺序拉取
+    page._refresh_now()
+    assert page._worker is not None
+    if page._worker is not None:
+        page._worker.wait(2000)
+    assert calls  # 新顺序的 fetcher 确实被调用
+    page._on_worker_finished()
+
+
+def test_settings_source_signal_emits_order(qapp, i18n_theme, tmp_path):
+    """设置页首选来源变更：发出重排后的完整顺序信号并持久化。"""
+    from deltaforcebox.core.settings import load_settings
+    from deltaforcebox.widgets.pages.settings_page import SettingsPage
+
+    i18n, theme = i18n_theme
+    settings = tmp_path / "settings.json"
+    page = SettingsPage(i18n, theme, settings_path=settings)
+    received: list[tuple[str, ...]] = []
+    page.password_source_changed.connect(received.append)
+    page.source_combo.setCurrentIndex(page.source_combo.findData("shushu_fan"))
+    assert received and received[0] == ("shushu_fan", "tmini")
+    assert load_settings(settings)["password_source_order"] == ["shushu_fan", "tmini"]
+
+
 # ── 侧栏注册 ───────────────────────────────────────────
 
 def test_sidebar_contains_tools_group(qapp, i18n_theme):
