@@ -1,4 +1,4 @@
-"""我的改枪码测试：解析规则 / 持久化 / 页面增删改查。"""
+"""我的改枪码测试：解析规则 / 候选提取 / 持久化 / 页面增删改查与筛选。"""
 
 from __future__ import annotations
 
@@ -9,13 +9,14 @@ import pytest
 
 from deltaforcebox.core.i18n import I18nManager
 from deltaforcebox.core.my_codes import (
+    load_candidates,
     load_my_codes,
     new_code_id,
     parse_gun_code,
     save_my_codes,
 )
 from deltaforcebox.core.theme import ThemeManager
-from deltaforcebox.widgets.pages.my_codes_page import MyCodesPage
+from deltaforcebox.widgets.pages.my_codes_page import CARD_HEIGHT, MyCodesPage
 
 # ── 解析规则 ─────────────────────────────────────────
 
@@ -48,7 +49,46 @@ def test_parse_gun_code_extra_dashes() -> None:
 def test_parse_gun_code_empty_and_whitespace() -> None:
     assert parse_gun_code("") == ("", "", "")
     assert parse_gun_code("   ") == ("", "", "")
+    # 空段被忽略后退化为两段：第二段视为识别码
     assert parse_gun_code("枪A--烽火地带") == ("枪A", "", "烽火地带")
+
+
+# ── 候选提取（与主播推荐一致） ───────────────────────
+
+def _write_guns_cache(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "saved_at": "t",
+                "source": "shushu.fan",
+                "solutions": [
+                    {"id": 1, "gun_name": "M7战斗步枪", "weapon_type": "突击步枪"},
+                    {"id": 2, "gun_name": "M700狙击步枪", "weapon_type": "狙击步枪"},
+                    {"id": 3, "gun_name": "M7战斗步枪", "weapon_type": "突击步枪"},
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_load_candidates_from_cache(tmp_path: Path) -> None:
+    path = tmp_path / "guns_cache.json"
+    _write_guns_cache(path)
+    weapons, guns = load_candidates(path)
+    assert weapons == ["狙击步枪", "突击步枪"]
+    assert guns == ["M700狙击步枪", "M7战斗步枪"]
+
+
+def test_load_candidates_missing_cache(tmp_path: Path) -> None:
+    assert load_candidates(tmp_path / "nope.json") == ([], [])
+
+
+def test_load_candidates_corrupt_cache(tmp_path: Path) -> None:
+    path = tmp_path / "guns_cache.json"
+    path.write_text("{bad", encoding="utf-8")
+    assert load_candidates(path) == ([], [])
 
 
 # ── 持久化 ───────────────────────────────────────────
@@ -61,6 +101,8 @@ def test_save_load_roundtrip(tmp_path: Path) -> None:
             "name": "满改M7",
             "code": "M7战斗步枪-烽火地带-CODE",
             "description": "",
+            "weapon": "M7战斗步枪",
+            "weapon_type": "突击步枪",
             "created_at": "t",
             "updated_at": "t",
         }
@@ -99,26 +141,74 @@ def page(qapp, tmp_path: Path) -> MyCodesPage:
         I18nManager(),
         ThemeManager(),
         codes_path=tmp_path / "my_gun_codes.json",
+        guns_cache_path=tmp_path / "guns_cache.json",
     )
 
 
-def _add(page: MyCodesPage, name: str, code: str, desc: str = "") -> None:
+def _add(
+    page: MyCodesPage,
+    name: str,
+    code: str,
+    desc: str = "",
+    weapon: str = "",
+    weapon_type: str = "",
+) -> None:
     page.name_input.setText(name)
     page.code_input.setText(code)
     page.desc_input.setText(desc)
+    page.weapon_combo.setEditText(weapon)
+    page.weapon_type_combo.setEditText(weapon_type)
     page._save()
 
 
+def _meta_text(card) -> str:
+    from PySide6.QtWidgets import QLabel
+
+    metas = [
+        lbl for lbl in card.findChildren(QLabel) if lbl.objectName() == "gunMeta"
+    ]
+    assert metas, "卡片缺少 gunMeta 标签"
+    return metas[0].text()
+
+
 def test_add_renders_and_persists(page: MyCodesPage) -> None:
-    _add(page, "满改M7", "M7战斗步枪-烽火地带-6ID3HD806QOMQD6J47QJA", "近战猛攻")
+    _add(
+        page,
+        "满改M7",
+        "M7战斗步枪-烽火地带-6ID3HD806QOMQD6J47QJA",
+        "近战猛攻",
+        "M7战斗步枪",
+        "突击步枪",
+    )
     assert len(page._records) == 1
     assert len(page._cards) == 1
-    assert page._records[0]["name"] == "满改M7"
-    assert page._records[0]["description"] == "近战猛攻"
+    record = page._records[0]
+    assert record["name"] == "满改M7"
+    assert record["description"] == "近战猛攻"
+    assert record["weapon"] == "M7战斗步枪"
+    assert record["weapon_type"] == "突击步枪"
     # 持久化落盘
     assert len(load_my_codes(page._codes_path)) == 1
-    # 卡片内容：命名 + 枪械·地图
-    assert page._cards[0].findChildren(type(page._cards[0].children()[0]))  # 结构存在即可
+
+
+def test_card_meta_and_copy_style(page: MyCodesPage) -> None:
+    """卡片显示「枪械名称 · 武器类型」，复制按钮与主播推荐同款 gunCopy 样式。"""
+    _add(page, "满改M7", "M7战斗步枪-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
+    card = page._cards[0]
+    assert card.copy_button.objectName() == "gunCopy"
+    assert _meta_text(card) == "M7战斗步枪 · 突击步枪"
+
+
+def test_card_meta_fallback_for_legacy_record(page: MyCodesPage) -> None:
+    """旧记录（无 weapon 字段）以改枪码首段兜底显示枪名。"""
+    _add(page, "旧记录", "M700狙击步枪-长弓溪谷-CODE2")
+    assert _meta_text(page._cards[0]) == "M700狙击步枪"
+
+
+def test_card_height_reduced(page: MyCodesPage) -> None:
+    """省略图片/作者/改枪码区后卡片高度控制在紧凑范围。"""
+    _add(page, "甲", "枪A-烽火地带-CODE1")
+    assert CARD_HEIGHT <= 200
 
 
 def test_add_requires_name_and_code(page: MyCodesPage) -> None:
@@ -135,18 +225,40 @@ def test_add_requires_name_and_code(page: MyCodesPage) -> None:
 
 
 def test_edit_updates_record(page: MyCodesPage) -> None:
-    _add(page, "旧名", "枪A-烽火地带-CODE1", "旧描述")
+    _add(page, "旧名", "枪A-烽火地带-CODE1", "旧描述", "枪A", "突击步枪")
     record = page._records[0]
     page._start_edit(record)
     assert page.name_input.text() == "旧名"
     assert page.code_input.text() == "枪A-烽火地带-CODE1"
     page.name_input.setText("新名")
     page.desc_input.setText("新描述")
+    page.weapon_type_combo.setEditText("狙击步枪")
     page._save()
     assert len(page._records) == 1
-    assert page._records[0]["name"] == "新名"
-    assert page._records[0]["description"] == "新描述"
-    assert page._records[0]["code"] == "枪A-烽火地带-CODE1"
+    record = page._records[0]
+    assert record["name"] == "新名"
+    assert record["description"] == "新描述"
+    assert record["code"] == "枪A-烽火地带-CODE1"
+    assert record["weapon_type"] == "狙击步枪"
+
+
+def test_edit_backfills_legacy_fields(page: MyCodesPage) -> None:
+    """旧记录（无 weapon/weapon_type）编辑保存后补齐字段。"""
+    page._records = [
+        {
+            "id": "old",
+            "name": "旧",
+            "code": "M7战斗步枪-烽火地带-CODE9",
+            "description": "",
+            "created_at": "t",
+            "updated_at": "t",
+        }
+    ]
+    page._start_edit(page._records[0])
+    assert page.weapon_combo.currentText() == ""
+    page.weapon_combo.setEditText("M7战斗步枪")
+    page._save()
+    assert page._records[0]["weapon"] == "M7战斗步枪"
 
 
 def test_delete_confirm_removes(page: MyCodesPage, monkeypatch) -> None:
@@ -190,6 +302,58 @@ def test_copy_button_writes_clipboard(page: MyCodesPage, qapp) -> None:
     _add(page, "满改M7", "M7战斗步枪-烽火地带-6ID3HD806QOMQD6J47QJA")
     page._cards[0]._copy()
     assert QApplication.clipboard().text() == "M7战斗步枪-烽火地带-6ID3HD806QOMQD6J47QJA"
+
+
+def test_filter_by_gun_and_weapon(qapp, tmp_path: Path) -> None:
+    """筛选需要候选下拉有对应选项：本测试注入带候选的缓存。"""
+    cache = tmp_path / "guns_cache.json"
+    _write_guns_cache(cache)
+    page = MyCodesPage(
+        I18nManager(),
+        ThemeManager(),
+        codes_path=tmp_path / "my_gun_codes.json",
+        guns_cache_path=cache,
+    )
+    _add(page, "甲", "枪A-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
+    _add(page, "乙", "枪B-长弓溪谷-CODE2", weapon="M700狙击步枪", weapon_type="狙击步枪")
+    _add(page, "丙", "枪C-零号大坝-CODE3", weapon="M7战斗步枪", weapon_type="突击步枪")
+    assert len(page._cards) == 3
+
+    # 按枪械筛选
+    page.filter_gun_combo.setCurrentIndex(
+        page.filter_gun_combo.findData("M7战斗步枪")
+    )
+    assert len(page._cards) == 2
+    # 叠加武器类型筛选
+    page.filter_weapon_combo.setCurrentIndex(
+        page.filter_weapon_combo.findData("狙击步枪")
+    )
+    assert len(page._cards) == 0
+    assert page.empty_label.text() == "没有符合筛选条件的改枪码"
+    # 全部重置恢复
+    page._reset_filters()
+    assert len(page._cards) == 3
+
+
+def test_filter_candidates_from_guns_cache(qapp, tmp_path: Path) -> None:
+    """筛选框候选与主播推荐一致（来自 guns_cache.json 去重排序）。"""
+    cache = tmp_path / "guns_cache.json"
+    _write_guns_cache(cache)
+    page = MyCodesPage(
+        I18nManager(),
+        ThemeManager(),
+        codes_path=tmp_path / "my_gun_codes.json",
+        guns_cache_path=cache,
+    )
+    gun_items = [
+        page.filter_gun_combo.itemText(i) for i in range(page.filter_gun_combo.count())
+    ]
+    weapon_items = [
+        page.filter_weapon_combo.itemText(i)
+        for i in range(page.filter_weapon_combo.count())
+    ]
+    assert gun_items == ["全部", "M700狙击步枪", "M7战斗步枪"]
+    assert weapon_items == ["全部", "狙击步枪", "突击步枪"]
 
 
 def test_empty_state_and_count(page: MyCodesPage) -> None:

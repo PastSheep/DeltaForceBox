@@ -1,7 +1,10 @@
 """我的改枪码页面：本地收藏主播之外的个人改枪码（鼠鼠工具 → 改枪码 → 我的改枪码）。
 
-- 输入：命名（必填）+ 改枪码（必填，粘贴游戏内复制）+ 描述（可选）；
-- 展示：类主播推荐卡片（无图、无作者、无价格），可复制、修改、删除；
+- 输入：命名（必填）+ 改枪码（必填，粘贴游戏内复制）+ 枪械名称 / 武器类型（可选，
+  候选与主播推荐一致）+ 描述（可选）；
+- 展示：类主播推荐卡片（无图、无作者、无价格）：命名 + 「枪械名称 · 武器类型」
+  + 描述滚动区 + 复制（gunCopy 同款）/ 修改 / 删除；
+- 筛选：枪械名称 / 武器类型双筛选框（候选同主播推荐）+ 全部重置；
 - 持久化：data/my_gun_codes.json（缺失/损坏回退空列表）。
 """
 
@@ -13,6 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -25,22 +29,29 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n import I18nManager
-from ...core.my_codes import load_my_codes, new_code_id, parse_gun_code, save_my_codes
+from ...core.my_codes import (
+    load_candidates,
+    load_my_codes,
+    new_code_id,
+    parse_gun_code,
+    save_my_codes,
+)
 from ...core.theme import ThemeManager
 from ..flow_layout import FlowLayout
 
 # 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
-CARD_HEIGHT = 250
+CARD_HEIGHT = 190
 MIN_CARD_WIDTH = 220
 MAX_CARD_WIDTH = 300
 GRID_PADDING = 12
-CODE_AREA_HEIGHT = 64
-DESC_AREA_HEIGHT = 64
+DESC_AREA_HEIGHT = 48
+
+FILTER_ALL = ""
 
 
 class MyCodeCard(QFrame):
-    """我的改枪码卡片：命名 + 枪械·地图 + 完整改枪码（可复制）+ 描述 + 修改/删除。"""
+    """我的改枪码卡片：命名 + 枪械·武器类型 + 描述 + 复制/修改/删除。"""
 
     def __init__(
         self,
@@ -67,34 +78,16 @@ class MyCodeCard(QFrame):
         title.setWordWrap(True)
         box.addWidget(title)
 
-        # 枪械 · 地图（解析自改枪码）
-        gun_name, map_name, _ = parse_gun_code(record.get("code") or "")
-        meta = " · ".join(x for x in (gun_name, map_name) if x)
+        # 枪械名称 · 武器类型（旧记录缺枪械字段时以改枪码首段兜底）
+        weapon = (record.get("weapon") or "").strip()
+        weapon_type = (record.get("weapon_type") or "").strip()
+        if not weapon:
+            weapon = parse_gun_code(record.get("code") or "")[0]
+        meta = " · ".join(x for x in (weapon, weapon_type) if x)
         meta_label = QLabel(meta or "—")
         meta_label.setObjectName("gunMeta")
         meta_label.setWordWrap(True)
         box.addWidget(meta_label)
-
-        # 完整改枪码（等宽、内部滚动）+ 复制按钮
-        code_row = QHBoxLayout()
-        code_row.setSpacing(6)
-        code_scroll = QScrollArea()
-        code_scroll.setObjectName("gunDescScroll")
-        code_scroll.setWidgetResizable(True)
-        code_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        code_scroll.setFixedHeight(CODE_AREA_HEIGHT)
-        code_inner = QLabel()
-        code_inner.setObjectName("myCodeText")
-        code_inner.setWordWrap(True)
-        code_inner.setText(record.get("code") or "")
-        code_scroll.setWidget(code_inner)
-        code_row.addWidget(code_scroll, 1)
-        self.copy_button = QPushButton(texts["copy"])
-        self.copy_button.setObjectName("gunCopy")
-        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        code_row.addWidget(self.copy_button)
-        box.addLayout(code_row)
-        self.copy_button.clicked.connect(self._copy)
 
         # 描述（可选，固定高度滚动区保持卡片等高）
         desc_scroll = QScrollArea()
@@ -110,9 +103,14 @@ class MyCodeCard(QFrame):
         desc_scroll.setWidget(desc_inner)
         box.addWidget(desc_scroll)
 
-        # 操作行：修改 / 删除
+        # 操作行：复制（与主播推荐同款 gunCopy 样式）+ 修改 + 删除
         actions = QHBoxLayout()
         actions.setSpacing(6)
+        self.copy_button = QPushButton(texts["copy"])
+        self.copy_button.setObjectName("gunCopy")
+        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        actions.addWidget(self.copy_button)
+        self.copy_button.clicked.connect(self._copy)
         edit_btn = QPushButton(texts["edit"])
         edit_btn.setObjectName("gunPagerBtn")
         edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -140,6 +138,7 @@ class MyCodesPage(QWidget):
         i18n: I18nManager,
         theme: ThemeManager,
         codes_path: Path | None = None,
+        guns_cache_path: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -147,7 +146,9 @@ class MyCodesPage(QWidget):
         self._i18n = i18n
         self._theme = theme
         self._codes_path = codes_path
+        self._guns_cache_path = guns_cache_path
         self._records = load_my_codes(codes_path)
+        self._candidates = load_candidates(guns_cache_path)
         self._cards: list[MyCodeCard] = []
         self._editing_id: str | None = None
         self._card_w = CARD_WIDTH
@@ -171,11 +172,28 @@ class MyCodesPage(QWidget):
         head.addWidget(self.add_btn)
         root.addLayout(head)
 
+        # 筛选行：枪械名称 / 武器类型（候选与主播推荐一致）+ 全部重置
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(8)
+        self.filter_gun_combo = QComboBox()
+        self.filter_gun_combo.setObjectName("gunFilter")
+        filter_row.addWidget(self.filter_gun_combo)
+        self.filter_weapon_combo = QComboBox()
+        self.filter_weapon_combo.setObjectName("gunFilter")
+        filter_row.addWidget(self.filter_weapon_combo)
+        filter_row.addStretch(1)
+        self.reset_btn = QPushButton()
+        self.reset_btn.setObjectName("gunFilterReset")
+        self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.reset_btn.clicked.connect(self._reset_filters)
+        filter_row.addWidget(self.reset_btn)
+        root.addLayout(filter_row)
+
         self.status_label = QLabel()
         self.status_label.setObjectName("hint")
         root.addWidget(self.status_label)
 
-        # 编辑表单（默认隐藏）：命名 / 改枪码 / 描述
+        # 编辑表单（默认隐藏）：命名 / 改枪码 / 枪械名称 / 武器类型 / 描述
         self.form = QWidget()
         form = QVBoxLayout(self.form)
         form.setContentsMargins(0, 0, 0, 0)
@@ -196,6 +214,24 @@ class MyCodesPage(QWidget):
         self.code_input.setObjectName("myCodeInput")
         row1.addWidget(self.code_input, 2)
         form.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
+        self.weapon_label = QLabel()
+        self.weapon_label.setObjectName("gunFilterLabel")
+        row2.addWidget(self.weapon_label)
+        self.weapon_combo = QComboBox()
+        self.weapon_combo.setObjectName("myCodeInput")
+        self.weapon_combo.setEditable(True)  # 候选同主播推荐，也允许自定义
+        row2.addWidget(self.weapon_combo, 1)
+        self.weapon_type_label = QLabel()
+        self.weapon_type_label.setObjectName("gunFilterLabel")
+        row2.addWidget(self.weapon_type_label)
+        self.weapon_type_combo = QComboBox()
+        self.weapon_type_combo.setObjectName("myCodeInput")
+        self.weapon_type_combo.setEditable(True)
+        row2.addWidget(self.weapon_type_combo, 1)
+        form.addLayout(row2)
 
         desc_row = QHBoxLayout()
         desc_row.setSpacing(8)
@@ -240,6 +276,8 @@ class MyCodesPage(QWidget):
         root.addWidget(self.scroll, 1)
 
         self.scroll.installEventFilter(self)
+        self.filter_gun_combo.currentIndexChanged.connect(lambda _i: self._render())
+        self.filter_weapon_combo.currentIndexChanged.connect(lambda _i: self._render())
         self.retranslate()
         self._render()
 
@@ -276,6 +314,29 @@ class MyCodesPage(QWidget):
         self._flow.invalidate()
         self._flow_host.updateGeometry()
 
+    # ── 筛选 ─────────────────────────────────────────
+
+    def _reset_filters(self) -> None:
+        """全部重置：两个筛选框恢复「全部」。"""
+        self.filter_gun_combo.setCurrentIndex(0)
+        self.filter_weapon_combo.setCurrentIndex(0)
+
+    def _filtered_records(self) -> list[dict]:
+        gun = str(self.filter_gun_combo.currentData() or "")
+        weapon = str(self.filter_weapon_combo.currentData() or "")
+        result = []
+        for record in self._records:
+            rec_gun = (record.get("weapon") or "").strip()
+            if not rec_gun:
+                rec_gun = parse_gun_code(record.get("code") or "")[0]
+            rec_weapon = (record.get("weapon_type") or "").strip()
+            if gun and rec_gun != gun:
+                continue
+            if weapon and rec_weapon != weapon:
+                continue
+            result.append(record)
+        return result
+
     # ── 交互 ─────────────────────────────────────────
 
     def _toggle_form(self) -> None:
@@ -283,6 +344,8 @@ class MyCodesPage(QWidget):
         self._editing_id = None
         for widget in (self.name_input, self.code_input, self.desc_input):
             widget.clear()
+        for combo in (self.weapon_combo, self.weapon_type_combo):
+            combo.setEditText("")
         self.form_hint.clear()
         self.form.show()
         self.name_input.setFocus()
@@ -294,11 +357,20 @@ class MyCodesPage(QWidget):
             self.form_hint.setText(self._i18n.t("mycodes.required"))
             return
         desc = self.desc_input.text().strip()
+        weapon = self.weapon_combo.currentText().strip()
+        weapon_type = self.weapon_type_combo.currentText().strip()
         now = time.strftime("%Y-%m-%d %H:%M:%S")
         if self._editing_id is not None:
             for record in self._records:
                 if record.get("id") == self._editing_id:
-                    record.update(name=name, code=code, description=desc, updated_at=now)
+                    record.update(
+                        name=name,
+                        code=code,
+                        description=desc,
+                        weapon=weapon,
+                        weapon_type=weapon_type,
+                        updated_at=now,
+                    )
                     break
         else:
             self._records.append(
@@ -307,6 +379,8 @@ class MyCodesPage(QWidget):
                     "name": name,
                     "code": code,
                     "description": desc,
+                    "weapon": weapon,
+                    "weapon_type": weapon_type,
                     "created_at": now,
                     "updated_at": now,
                 }
@@ -316,14 +390,25 @@ class MyCodesPage(QWidget):
         self._render()
 
     def _start_edit(self, record: dict) -> None:
-        """修改模式：表单预填该条。"""
+        """修改模式：表单预填该条（旧记录缺字段时置空由用户补）。"""
         self._editing_id = record.get("id")
         self.name_input.setText(record.get("name") or "")
         self.code_input.setText(record.get("code") or "")
         self.desc_input.setText(record.get("description") or "")
+        self._set_combo_text(self.weapon_combo, record.get("weapon") or "")
+        self._set_combo_text(self.weapon_type_combo, record.get("weapon_type") or "")
         self.form_hint.clear()
         self.form.show()
         self.name_input.setFocus()
+
+    @staticmethod
+    def _set_combo_text(combo: QComboBox, text: str) -> None:
+        """预填可编辑下拉框：命中候选选中该项，否则直接填入自定义文本。"""
+        index = combo.findText(text)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+        else:
+            combo.setEditText(text)
 
     def _confirm_delete(self, record: dict) -> None:
         title = record.get("name") or record.get("code") or ""
@@ -356,7 +441,8 @@ class MyCodesPage(QWidget):
             if widget is not None:
                 widget.deleteLater()
         self._cards = []
-        for record in self._records:
+        filtered = self._filtered_records()
+        for record in filtered:
             card = MyCodeCard(
                 record,
                 self._card_texts(),
@@ -367,9 +453,13 @@ class MyCodesPage(QWidget):
             self._cards.append(card)
             self._flow.addWidget(card)
         self.status_label.setText(
-            self._i18n.t("mycodes.count").replace("%1", str(len(self._records)))
+            self._i18n.t("mycodes.count").replace("%1", str(len(filtered)))
         )
-        self.empty_label.setVisible(len(self._records) == 0)
+        if not self._records:
+            self.empty_label.setText(self._i18n.t("mycodes.empty"))
+        elif not filtered:
+            self.empty_label.setText(self._i18n.t("mycodes.no_match"))
+        self.empty_label.setVisible(len(filtered) == 0)
         self._flow.invalidate()
         self._flow_host.updateGeometry()
 
@@ -378,12 +468,29 @@ class MyCodesPage(QWidget):
         self.add_btn.setText(self._i18n.t("mycodes.add"))
         self.name_label.setText(self._i18n.t("mycodes.name"))
         self.code_label.setText(self._i18n.t("mycodes.code"))
+        self.weapon_label.setText(self._i18n.t("mycodes.weapon"))
+        self.weapon_type_label.setText(self._i18n.t("mycodes.weapon_type"))
         self.desc_label.setText(self._i18n.t("mycodes.desc"))
         self.name_input.setPlaceholderText(self._i18n.t("mycodes.name_placeholder"))
         self.code_input.setPlaceholderText(self._i18n.t("mycodes.code_placeholder"))
         self.desc_input.setPlaceholderText(self._i18n.t("mycodes.desc_placeholder"))
         self.save_btn.setText(self._i18n.t("mycodes.save"))
         self.cancel_btn.setText(self._i18n.t("mycodes.cancel"))
+        self.reset_btn.setText(self._i18n.t("guncode.reset_all"))
+        # 筛选候选（与主播推荐一致）：全部 + 缓存去重排序
+        all_text = self._i18n.t("guncode.filter_all")
+        weapons, guns = self._candidates
+        for combo, items in ((self.filter_gun_combo, guns), (self.filter_weapon_combo, weapons)):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem(all_text, "")
+            for name in items:
+                combo.addItem(name, name)
+            combo.blockSignals(False)
+        # 表单枪械/类型候选
+        for combo, items in ((self.weapon_combo, guns), (self.weapon_type_combo, weapons)):
+            combo.clear()
+            combo.addItems(items)
         self.empty_label.setText(self._i18n.t("mycodes.empty"))
         if self._cards:
             self._render()

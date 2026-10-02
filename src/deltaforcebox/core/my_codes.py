@@ -66,3 +66,29 @@ def parse_gun_code(code: str) -> tuple[str, str, str]:
     if len(parts) == 2:
         return parts[0], "", parts[1]
     return parts[0], parts[1], "-".join(parts[2:])
+
+
+def load_candidates(
+    guns_cache_path: Path | None = None,
+) -> tuple[list[str], list[str]]:
+    """从改枪码缓存提取（武器类型, 枪械名称）候选，与主播推荐筛选一致。
+
+    缓存缺失/损坏/无方案时返回空列表（页面只剩「全部」选项）。
+    """
+    from .gun_solutions import load_guns_cache
+
+    data = load_guns_cache(guns_cache_path)
+    if not data:
+        return [], []
+    weapons: set[str] = set()
+    guns: set[str] = set()
+    for item in data.get("solutions") or []:
+        if not isinstance(item, dict):
+            continue
+        weapon = str(item.get("weapon_type") or "").strip()
+        gun = str(item.get("gun_name") or "").strip()
+        if weapon:
+            weapons.add(weapon)
+        if gun:
+            guns.add(gun)
+    return sorted(weapons), sorted(guns)
