@@ -32,13 +32,13 @@ def test_parse_version(text: str, expected: object) -> None:
 
 
 def test_is_newer_than_local() -> None:
-    """与本地 __version__（Beta-4.2）比较：更高/同版本/正式版判定。"""
+    """与本地 __version__（Beta-5.0）比较：更高/同版本/正式版判定。"""
     from deltaforcebox import __version__ as local_version
 
-    assert local_version == "Beta-4.2"
-    assert updater.is_newer((0, 4, 3))
-    assert not updater.is_newer((0, 4, 2))
-    assert not updater.is_newer((0, 3, 9))
+    assert local_version == "Beta-5.0"
+    assert updater.is_newer((0, 5, 1))
+    assert not updater.is_newer((0, 5, 0))
+    assert not updater.is_newer((0, 4, 9))
     assert updater.is_newer((1, 1, 0))  # 正式版高于所有 Beta
 
 
