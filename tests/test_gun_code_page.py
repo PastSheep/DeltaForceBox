@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel
 
 from deltaforcebox.core.gun_solutions import (
@@ -127,7 +128,7 @@ def test_filter_reset_to_all(page: GunCodePage) -> None:
     combo = page._filter_combos["author"]
     combo.setCurrentIndex(combo.findData("JDG-duyilin"))
     assert len(page._cards) == 1
-    combo.setCurrentIndex(0)  # 全部
+    combo.reset()  # 空白=无条件
     assert len(page._cards) == 3
 
 
@@ -194,11 +195,12 @@ def test_reset_all_button(page: GunCodePage) -> None:
     page._filter_combos["author"].setCurrentIndex(
         page._filter_combos["author"].findData("测试主播")
     )
-    assert page._filter_combos["weapon"].currentIndex() != 0
+    assert page._filter_combos["weapon"].filter_text() == "狙击步枪"
     assert page.reset_btn.text() == "全部重置"
     page.reset_btn.click()
     for combo in page._filter_combos.values():
-        assert combo.currentIndex() == 0
+        assert combo.filter_text() == ""  # 重置=无条件
+        assert combo.currentText() == "全部"  # 非焦点+无条件显示「全部」
     assert len(page._cards) == min(page._page_size, len(page._all_solutions))
 
 
@@ -442,3 +444,37 @@ def test_pixmap_cache_memory_layer(page: GunCodePage, tmp_path: Path) -> None:
         assert QPixmapCache.find("gun:avatar:other") is None
     finally:
         QPixmapCache.clear()
+
+def test_filter_input_contains(page: GunCodePage) -> None:
+    """筛选框输入支持包含匹配（Beta-4.1）。"""
+    page._set_solutions(_make_solutions(40))
+    combo = page._filter_combos["gun"]
+    combo.setEditText("M700")
+    assert len(page._cards) > 0
+    assert all("M700" in card.solution.gun_name for card in page._cards)
+    combo.setEditText("")
+    assert len(page._cards) == min(page._page_size, len(page._all_solutions))
+
+
+def test_filter_combo_searchable(page: GunCodePage) -> None:
+    """筛选下拉保持候选之外新增输入：editable + 弹层包含匹配（Beta-4.1）。"""
+    combo = page._filter_combos["gun"]
+    assert combo.isEditable()
+    assert combo.completer().filterMode() == Qt.MatchFlag.MatchContains
+    # 输入任意文本不会固化进候选列表（NoInsert）
+    combo.setEditText("不存在枪")
+    items = [combo.itemText(i) for i in range(combo.count())]
+    assert "不存在枪" not in items
+
+
+def test_filter_linkage_by_input(page: GunCodePage) -> None:
+    """武器类型输入文本后，枪械候选按包含匹配收窄（Beta-4.1）。"""
+    page._set_solutions(_make_solutions(40))
+    combo = page._filter_combos["weapon"]
+    combo.setEditText("狙击")
+    guns = [
+        page._filter_combos["gun"].itemText(i)
+        for i in range(page._filter_combos["gun"].count())
+    ]
+    assert "全部" in guns  # 顶部「全部」文本项（内部=无条件）
+    assert "M700狙击步枪" in guns

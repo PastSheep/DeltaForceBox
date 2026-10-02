@@ -47,6 +47,7 @@ from ...core.gun_solutions import (
 from ...core.i18n import I18nManager
 from ...core.theme import ThemeManager
 from ..flow_layout import FlowLayout
+from ..search_combo import SearchCombo
 
 # 卡片尺寸与网格间距（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
@@ -96,6 +97,25 @@ def _track_worker(worker: QThread) -> None:
             pass
 
     worker.finished.connect(_on_done)
+
+
+def _text_contains(field: str, text: str) -> bool:
+    """大小写不敏感的包含匹配（筛选输入语义）。"""
+    return text.lower() in (field or "").lower()
+
+
+def _match_solution(solutions: object, filters: dict[str, str]) -> bool:
+    """四维 AND 过滤（包含匹配，文本为空视为无条件）。"""
+    s = solutions
+    return (
+        (not filters["weapon"] or _text_contains(s.weapon_type, filters["weapon"]))
+        and (not filters["gun"] or _text_contains(s.gun_name, filters["gun"]))
+        and (not filters["author"] or _text_contains(s.author, filters["author"]))
+        and (
+            not filters["tag"]
+            or any(_text_contains(t, filters["tag"]) for t in s.tags)
+        )
+    )
 
 
 def format_price(price: int) -> str:
@@ -385,7 +405,7 @@ class GunCodePage(QWidget):
             label.setObjectName("gunFilterLabel")
             label.setProperty("dim", dim)
             filter_row.addWidget(label)
-            combo = QComboBox()
+            combo = SearchCombo()
             combo.setObjectName("gunFilter")
             combo.setMinimumWidth(96)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
@@ -435,13 +455,13 @@ class GunCodePage(QWidget):
         # 卡片宽度自适应（宽度随视口伸缩，填满每行，参考每日密码页）
         self.scroll.installEventFilter(self)
 
-        # 筛选联动：武器类型变化 -> 枪械名称选项联动
-        self._filter_combos["weapon"].currentIndexChanged.connect(
+        # 筛选联动：武器类型变化 -> 枪械名称选项联动（输入即联动）
+        self._filter_combos["weapon"].lineEdit().textChanged.connect(
             self._on_weapon_changed
         )
         for dim in ("gun", "author", "tag"):
-            self._filter_combos[dim].currentIndexChanged.connect(
-                lambda _idx, d=dim: self._apply_filters()
+            self._filter_combos[dim].lineEdit().textChanged.connect(
+                lambda _text, d=dim: self._apply_filters()
             )
 
         # 驻留期间周期检查：缓存过期且不在重试冷却内时自动同步
@@ -516,30 +536,28 @@ class GunCodePage(QWidget):
         authors = sorted({s.author for s in self._all_solutions if s.author})
         tags = sorted({t for s in self._all_solutions for t in s.tags})
 
-        all_text = self._i18n.t("guncode.filter_all")
         self._filter_combos["weapon"].blockSignals(True)
         self._filter_combos["gun"].blockSignals(True)
         self._filter_combos["author"].blockSignals(True)
         self._filter_combos["tag"].blockSignals(True)
 
-        def _fill(combo: QComboBox, items: list[str]) -> None:
-            combo.clear()
-            combo.addItem(all_text, "")
-            for name in items:
-                combo.addItem(name, name)
-
-        _fill(self._filter_combos["weapon"], weapons)
+        all_text = self._i18n.t("guncode.filter_all")
+        # SearchCombo：顶部「全部」文本项 + 候选（空白/「全部」均为无条件）
+        self._filter_combos["weapon"].set_items(weapons, all_text, preserve=False)
         # 枪械选项初始按全部武器类型列出（联动在 _on_weapon_changed 中处理）
-        _fill(self._filter_combos["gun"], guns)
-        _fill(self._filter_combos["author"], authors)
-        _fill(self._filter_combos["tag"], tags)
+        self._filter_combos["gun"].set_items(guns, all_text, preserve=False)
+        self._filter_combos["author"].set_items(authors, all_text, preserve=False)
+        self._filter_combos["tag"].set_items(tags, all_text, preserve=False)
 
         # 动态宽度：按本维度候选项最长文本设置最小宽度，确保收起状态下
         # 也能完整显示全部文字（候选项变化时随重建自动更新）
         for dim in self.FILTER_DIMS:
             combo = self._filter_combos[dim]
             fm = combo.fontMetrics()
-            widest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+            widest = max(
+                (fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count())),
+                default=0,
+            )
             combo.setMinimumWidth(widest + 28)
 
         self._filter_combos["weapon"].blockSignals(False)
@@ -549,40 +567,28 @@ class GunCodePage(QWidget):
         # 重置为「全部」并清空筛选状态
         self._filters = {d: "" for d in self.FILTER_DIMS}
 
-    def _on_weapon_changed(self, _index: int) -> None:
-        """武器类型变化：联动刷新枪械名称选项，并应用筛选。"""
-        weapon = str(self._filter_combos["weapon"].currentData() or "")
+    def _on_weapon_changed(self, _text: str) -> None:
+        """武器类型变化：联动刷新枪械名称选项（保留当前枪械输入），并应用筛选。"""
+        weapon = self._filter_combos["weapon"].filter_text()
         combo = self._filter_combos["gun"]
-        combo.blockSignals(True)
-        combo.clear()
-        combo.addItem(self._i18n.t("guncode.filter_all"), "")
         if weapon:
             guns = sorted(
-                {s.gun_name for s in self._all_solutions if s.weapon_type == weapon and s.gun_name}
+                {
+                    s.gun_name
+                    for s in self._all_solutions
+                    if s.weapon_type and _text_contains(s.weapon_type, weapon) and s.gun_name
+                }
             )
         else:
             guns = sorted({s.gun_name for s in self._all_solutions if s.gun_name})
-        for name in guns:
-            combo.addItem(name, name)
-        combo.blockSignals(False)
-        self._filters["gun"] = ""
+        combo.set_items(guns, self._i18n.t("guncode.filter_all"), preserve=True)
         self._apply_filters()
 
     def _apply_filters(self) -> None:
-        """按四个维度 AND 过滤全量方案并重新渲染。"""
+        """按四个维度 AND 过滤全量方案并重新渲染（输入文本为包含匹配）。"""
         for dim in self.FILTER_DIMS:
-            self._filters[dim] = str(self._filter_combos[dim].currentData() or "")
-        result = [
-            s
-            for s in self._all_solutions
-            if (not self._filters["weapon"] or s.weapon_type == self._filters["weapon"])
-            and (not self._filters["gun"] or s.gun_name == self._filters["gun"])
-            and (not self._filters["author"] or s.author == self._filters["author"])
-            and (
-                not self._filters["tag"]
-                or any(t == self._filters["tag"] for t in s.tags)
-            )
-        ]
+            self._filters[dim] = self._filter_combos[dim].filter_text()
+        result = [s for s in self._all_solutions if _match_solution(s, self._filters)]
         self._render(result, stale=False)
 
     def _render(self, solutions: list[GunSolution], stale: bool = False) -> None:
@@ -681,31 +687,18 @@ class GunCodePage(QWidget):
         self.status_label.setText(" · ".join(parts))
 
     def _on_reset_filters(self) -> None:
-        """全部重置：四个筛选框恢复为「全部」并重新渲染。"""
+        """全部重置：清空四个筛选框输入（textChanged 自动驱动筛选）。"""
         for combo in self._filter_combos.values():
-            combo.blockSignals(True)
-            combo.setCurrentIndex(0)
-            combo.blockSignals(False)
-        self._render_filtered()
+            combo.reset()
 
     def _render_filtered(self, stale: bool = False) -> None:
         """应用当前筛选渲染（筛选状态已存在下拉框时）。"""
         if not self._all_solutions:
             return
-        # 从下拉框当前值重建筛选条件（缓存/同步后选项已重建为「全部」）
+        # 从下拉框当前输入重建筛选条件（缓存/同步后选项已重建为「全部」）
         for dim in self.FILTER_DIMS:
-            self._filters[dim] = str(self._filter_combos[dim].currentData() or "")
-        result = [
-            s
-            for s in self._all_solutions
-            if (not self._filters["weapon"] or s.weapon_type == self._filters["weapon"])
-            and (not self._filters["gun"] or s.gun_name == self._filters["gun"])
-            and (not self._filters["author"] or s.author == self._filters["author"])
-            and (
-                not self._filters["tag"]
-                or any(t == self._filters["tag"] for t in s.tags)
-            )
-        ]
+            self._filters[dim] = self._filter_combos[dim].filter_text()
+        result = [s for s in self._all_solutions if _match_solution(s, self._filters)]
         self._render(result, stale=stale)
 
     def _build_card(self, solution: GunSolution) -> GunSolutionCard:
@@ -845,15 +838,10 @@ class GunCodePage(QWidget):
             "author": "guncode.filter_author",
             "tag": "guncode.filter_tag",
         }
-        all_text = self._i18n.t("guncode.filter_all")
         for dim, key in labels.items():
             for label in self.findChildren(QLabel, "gunFilterLabel"):
                 if label.property("dim") == dim:
                     label.setText(self._i18n.t(key))
-            combo = self._filter_combos[dim]
-            combo.blockSignals(True)
-            combo.setItemText(0, all_text)
-            combo.blockSignals(False)
         self.prev_btn.setText(self._i18n.t("guncode.prev_page"))
         self.next_btn.setText(self._i18n.t("guncode.next_page"))
         self.reset_btn.setText(self._i18n.t("guncode.reset_all"))

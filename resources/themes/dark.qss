@@ -436,3 +436,13 @@ QPushButton#gunPagerNumActive {
   padding: 0;
 }
 QLabel#gunPagerLabel { color: #b8b8bd; padding: 0 8px; }
+QPushButton#myCodeDelete {
+    background: transparent;
+    border: 1px solid #e5484d;
+    border-radius: 4px;
+    padding: 4px 10px;
+    color: #ff6b6b;
+}
+QPushButton#myCodeDelete:hover {
+    background: rgba(229, 72, 77, 0.15);
+}

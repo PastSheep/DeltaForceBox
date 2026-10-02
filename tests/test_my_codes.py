@@ -376,3 +376,50 @@ def test_sidebar_and_pages_registered(qapp, tmp_path: Path) -> None:
     assert window.pages["my_codes"].title_label.text() == "我的改枪码"
     # 侧栏存在对应条目
     assert window._find_item_by_key("my_codes") is not None
+
+def test_filter_by_input_contains(page: MyCodesPage) -> None:
+    """筛选框输入支持包含匹配（Beta-4.1）。"""
+    _add(page, "甲", "枪A-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
+    _add(page, "乙", "枪B-长弓溪谷-CODE2", weapon="K416突击步枪", weapon_type="狙击步枪")
+    page.filter_gun_combo.setEditText("M7战")
+    assert len(page._cards) == 1
+    page.filter_gun_combo.setEditText("")
+    page.filter_weapon_combo.setEditText("狙")
+    assert len(page._cards) == 1
+    page.filter_weapon_combo.setEditText("")
+    assert len(page._cards) == 2
+
+
+def test_no_description_placeholder(page: MyCodesPage) -> None:
+    """未填写描述时卡片显示「暂无详细介绍」（Beta-4.1）。"""
+    from PySide6.QtWidgets import QLabel
+
+    _add(page, "无描述", "枪A-烽火地带-CODE1")
+    descs = [
+        lbl for lbl in page._cards[0].findChildren(QLabel) if lbl.objectName() == "gunDesc"
+    ]
+    assert descs and descs[0].text() == "暂无详细介绍"
+    _add(page, "有描述", "枪B-烽火地带-CODE2", "详细说明")
+    descs = [
+        lbl for lbl in page._cards[1].findChildren(QLabel) if lbl.objectName() == "gunDesc"
+    ]
+    assert descs and descs[0].text() == "详细说明"
+
+
+def test_delete_button_red_style(page: MyCodesPage) -> None:
+    """删除按钮使用红色样式 objectName myCodeDelete（Beta-4.1）。"""
+    from PySide6.QtWidgets import QPushButton
+
+    _add(page, "甲", "枪A-烽火地带-CODE1")
+    btns = [
+        b
+        for b in page._cards[0].findChildren(QPushButton)
+        if b.objectName() == "myCodeDelete"
+    ]
+    assert btns and btns[0].text() == "删除"
+
+
+def test_filter_labels_shown(page: MyCodesPage) -> None:
+    """筛选框补齐文字提示（Beta-4.1）。"""
+    assert page.filter_gun_label.text() == "枪械名称"
+    assert page.filter_weapon_label.text() == "武器类型"

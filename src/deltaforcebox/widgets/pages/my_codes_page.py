@@ -38,6 +38,7 @@ from ...core.my_codes import (
 )
 from ...core.theme import ThemeManager
 from ..flow_layout import FlowLayout
+from ..search_combo import SearchCombo
 
 # 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
@@ -48,6 +49,11 @@ GRID_PADDING = 12
 DESC_AREA_HEIGHT = 48
 
 FILTER_ALL = ""
+
+
+def _text_contains(field: str, text: str) -> bool:
+    """大小写不敏感的包含匹配（筛选输入语义）。"""
+    return text.lower() in (field or "").lower()
 
 
 class MyCodeCard(QFrame):
@@ -99,7 +105,7 @@ class MyCodeCard(QFrame):
         desc_inner.setObjectName("gunDesc")
         desc_inner.setWordWrap(True)
         desc_inner.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        desc_inner.setText(record.get("description") or "")
+        desc_inner.setText(record.get("description") or texts["no_desc"])
         desc_scroll.setWidget(desc_inner)
         box.addWidget(desc_scroll)
 
@@ -117,7 +123,7 @@ class MyCodeCard(QFrame):
         edit_btn.clicked.connect(lambda: on_edit(self._record))
         actions.addWidget(edit_btn)
         delete_btn = QPushButton(texts["delete"])
-        delete_btn.setObjectName("gunPagerBtn")
+        delete_btn.setObjectName("myCodeDelete")
         delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         delete_btn.clicked.connect(lambda: on_delete(self._record))
         actions.addWidget(delete_btn)
@@ -172,13 +178,19 @@ class MyCodesPage(QWidget):
         head.addWidget(self.add_btn)
         root.addLayout(head)
 
-        # 筛选行：枪械名称 / 武器类型（候选与主播推荐一致）+ 全部重置
+        # 筛选行：枪械名称 / 武器类型（候选与主播推荐一致，可输入）+ 全部重置
         filter_row = QHBoxLayout()
         filter_row.setSpacing(8)
-        self.filter_gun_combo = QComboBox()
+        self.filter_gun_label = QLabel()
+        self.filter_gun_label.setObjectName("gunFilterLabel")
+        filter_row.addWidget(self.filter_gun_label)
+        self.filter_gun_combo = SearchCombo()
         self.filter_gun_combo.setObjectName("gunFilter")
         filter_row.addWidget(self.filter_gun_combo)
-        self.filter_weapon_combo = QComboBox()
+        self.filter_weapon_label = QLabel()
+        self.filter_weapon_label.setObjectName("gunFilterLabel")
+        filter_row.addWidget(self.filter_weapon_label)
+        self.filter_weapon_combo = SearchCombo()
         self.filter_weapon_combo.setObjectName("gunFilter")
         filter_row.addWidget(self.filter_weapon_combo)
         filter_row.addStretch(1)
@@ -276,8 +288,8 @@ class MyCodesPage(QWidget):
         root.addWidget(self.scroll, 1)
 
         self.scroll.installEventFilter(self)
-        self.filter_gun_combo.currentIndexChanged.connect(lambda _i: self._render())
-        self.filter_weapon_combo.currentIndexChanged.connect(lambda _i: self._render())
+        self.filter_gun_combo.lineEdit().textChanged.connect(lambda _t: self._render())
+        self.filter_weapon_combo.lineEdit().textChanged.connect(lambda _t: self._render())
         self.retranslate()
         self._render()
 
@@ -317,22 +329,22 @@ class MyCodesPage(QWidget):
     # ── 筛选 ─────────────────────────────────────────
 
     def _reset_filters(self) -> None:
-        """全部重置：两个筛选框恢复「全部」。"""
-        self.filter_gun_combo.setCurrentIndex(0)
-        self.filter_weapon_combo.setCurrentIndex(0)
+        """全部重置：清空两个筛选框输入（textChanged 自动驱动渲染）。"""
+        self.filter_gun_combo.reset()
+        self.filter_weapon_combo.reset()
 
     def _filtered_records(self) -> list[dict]:
-        gun = str(self.filter_gun_combo.currentData() or "")
-        weapon = str(self.filter_weapon_combo.currentData() or "")
+        gun = self.filter_gun_combo.filter_text()
+        weapon = self.filter_weapon_combo.filter_text()
         result = []
         for record in self._records:
             rec_gun = (record.get("weapon") or "").strip()
             if not rec_gun:
                 rec_gun = parse_gun_code(record.get("code") or "")[0]
             rec_weapon = (record.get("weapon_type") or "").strip()
-            if gun and rec_gun != gun:
+            if gun and not _text_contains(rec_gun, gun):
                 continue
-            if weapon and rec_weapon != weapon:
+            if weapon and not _text_contains(rec_weapon, weapon):
                 continue
             result.append(record)
         return result
@@ -428,6 +440,7 @@ class MyCodesPage(QWidget):
 
     def _card_texts(self) -> dict[str, str]:
         return {
+            "no_desc": self._i18n.t("mycodes.no_desc"),
             "copy": self._i18n.t("mycodes.copy"),
             "copied": self._i18n.t("mycodes.copied"),
             "edit": self._i18n.t("mycodes.edit"),
@@ -477,16 +490,13 @@ class MyCodesPage(QWidget):
         self.save_btn.setText(self._i18n.t("mycodes.save"))
         self.cancel_btn.setText(self._i18n.t("mycodes.cancel"))
         self.reset_btn.setText(self._i18n.t("guncode.reset_all"))
-        # 筛选候选（与主播推荐一致）：全部 + 缓存去重排序
+        self.filter_gun_label.setText(self._i18n.t("mycodes.weapon"))
+        self.filter_weapon_label.setText(self._i18n.t("mycodes.weapon_type"))
+        # 筛选候选（与主播推荐一致）：顶部「全部」文本项 + 缓存去重排序
         all_text = self._i18n.t("guncode.filter_all")
         weapons, guns = self._candidates
-        for combo, items in ((self.filter_gun_combo, guns), (self.filter_weapon_combo, weapons)):
-            combo.blockSignals(True)
-            combo.clear()
-            combo.addItem(all_text, "")
-            for name in items:
-                combo.addItem(name, name)
-            combo.blockSignals(False)
+        self.filter_gun_combo.set_items(guns, all_text, preserve=False)
+        self.filter_weapon_combo.set_items(weapons, all_text, preserve=False)
         # 表单枪械/类型候选
         for combo, items in ((self.weapon_combo, guns), (self.weapon_type_combo, weapons)):
             combo.clear()

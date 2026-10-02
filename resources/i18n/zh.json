@@ -86,6 +86,7 @@
   "mycodes.weapon_type": "武器类型",
   "mycodes.empty": "暂无保存的改枪码，点击右上角「添加改枪码」开始收藏",
   "mycodes.no_match": "没有符合筛选条件的改枪码",
+  "mycodes.no_desc": "暂无详细介绍",
   "mycodes.count": "共 %1 条",
   "mycodes.required": "命名与改枪码不能为空",
   "mycodes.delete_confirm": "确定删除「%1」？",
