@@ -81,6 +81,17 @@ def test_load_candidates_from_cache(tmp_path: Path) -> None:
     assert guns == ["M700狙击步枪", "M7战斗步枪"]
 
 
+def test_build_gun_weapon_map_from_cache(tmp_path: Path) -> None:
+    """枪械→武器类型从属映射（Beta-4.2）：同枪名合并、缺失返回空。"""
+    path = tmp_path / "guns_cache.json"
+    _write_guns_cache(path)
+    from deltaforcebox.core.my_codes import build_gun_weapon_map
+
+    mapping = build_gun_weapon_map(path)
+    assert mapping == {"M7战斗步枪": "突击步枪", "M700狙击步枪": "狙击步枪"}
+    assert build_gun_weapon_map(tmp_path / "nope.json") == {}
+
+
 def test_load_candidates_missing_cache(tmp_path: Path) -> None:
     assert load_candidates(tmp_path / "nope.json") == ([], [])
 
@@ -136,28 +147,21 @@ def test_new_code_id_unique() -> None:
 
 @pytest.fixture()
 def page(qapp, tmp_path: Path) -> MyCodesPage:
-    """临时数据文件的页面（不污染 data/）。"""
+    """临时数据文件的页面（不污染 data/）；缓存写入从属映射供自动解析。"""
+    cache = tmp_path / "guns_cache.json"
+    _write_guns_cache(cache)
     return MyCodesPage(
         I18nManager(),
         ThemeManager(),
         codes_path=tmp_path / "my_gun_codes.json",
-        guns_cache_path=tmp_path / "guns_cache.json",
+        guns_cache_path=cache,
     )
 
 
-def _add(
-    page: MyCodesPage,
-    name: str,
-    code: str,
-    desc: str = "",
-    weapon: str = "",
-    weapon_type: str = "",
-) -> None:
+def _add(page: MyCodesPage, name: str, code: str, desc: str = "") -> None:
     page.name_input.setText(name)
-    page.code_input.setText(code)
+    page.code_input.setText(code)  # textChanged 自动带出枪械/类型
     page.desc_input.setText(desc)
-    page.weapon_combo.setEditText(weapon)
-    page.weapon_type_combo.setEditText(weapon_type)
     page._save()
 
 
@@ -177,8 +181,6 @@ def test_add_renders_and_persists(page: MyCodesPage) -> None:
         "满改M7",
         "M7战斗步枪-烽火地带-6ID3HD806QOMQD6J47QJA",
         "近战猛攻",
-        "M7战斗步枪",
-        "突击步枪",
     )
     assert len(page._records) == 1
     assert len(page._cards) == 1
@@ -193,16 +195,16 @@ def test_add_renders_and_persists(page: MyCodesPage) -> None:
 
 def test_card_meta_and_copy_style(page: MyCodesPage) -> None:
     """卡片显示「枪械名称 · 武器类型」，复制按钮与主播推荐同款 gunCopy 样式。"""
-    _add(page, "满改M7", "M7战斗步枪-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
+    _add(page, "满改M7", "M7战斗步枪-烽火地带-CODE1")
     card = page._cards[0]
     assert card.copy_button.objectName() == "gunCopy"
     assert _meta_text(card) == "M7战斗步枪 · 突击步枪"
 
 
-def test_card_meta_fallback_for_legacy_record(page: MyCodesPage) -> None:
-    """旧记录（无 weapon 字段）以改枪码首段兜底显示枪名。"""
+def test_card_meta_auto_from_code(page: MyCodesPage) -> None:
+    """枪械/类型由改枪码自动带出（Beta-4.2）：映射命中时 meta 完整。"""
     _add(page, "旧记录", "M700狙击步枪-长弓溪谷-CODE2")
-    assert _meta_text(page._cards[0]) == "M700狙击步枪"
+    assert _meta_text(page._cards[0]) == "M700狙击步枪 · 狙击步枪"
 
 
 def test_card_height_reduced(page: MyCodesPage) -> None:
@@ -225,21 +227,23 @@ def test_add_requires_name_and_code(page: MyCodesPage) -> None:
 
 
 def test_edit_updates_record(page: MyCodesPage) -> None:
-    _add(page, "旧名", "枪A-烽火地带-CODE1", "旧描述", "枪A", "突击步枪")
+    _add(page, "旧名", "M7战斗步枪-烽火地带-CODE1", "旧描述")
     record = page._records[0]
     page._start_edit(record)
     assert page.name_input.text() == "旧名"
-    assert page.code_input.text() == "枪A-烽火地带-CODE1"
+    assert page.code_input.text() == "M7战斗步枪-烽火地带-CODE1"
+    assert page.weapon_input.text() == "M7战斗步枪"  # 编辑自动带出
+    assert page.weapon_type_input.text() == "突击步枪"
     page.name_input.setText("新名")
     page.desc_input.setText("新描述")
-    page.weapon_type_combo.setEditText("狙击步枪")
     page._save()
     assert len(page._records) == 1
     record = page._records[0]
     assert record["name"] == "新名"
     assert record["description"] == "新描述"
-    assert record["code"] == "枪A-烽火地带-CODE1"
-    assert record["weapon_type"] == "狙击步枪"
+    assert record["code"] == "M7战斗步枪-烽火地带-CODE1"
+    assert record["weapon"] == "M7战斗步枪"
+    assert record["weapon_type"] == "突击步枪"
 
 
 def test_edit_backfills_legacy_fields(page: MyCodesPage) -> None:
@@ -255,10 +259,10 @@ def test_edit_backfills_legacy_fields(page: MyCodesPage) -> None:
         }
     ]
     page._start_edit(page._records[0])
-    assert page.weapon_combo.currentText() == ""
-    page.weapon_combo.setEditText("M7战斗步枪")
+    assert page.weapon_input.text() == "M7战斗步枪"  # 旧记录编辑自动带出
     page._save()
     assert page._records[0]["weapon"] == "M7战斗步枪"
+    assert page._records[0]["weapon_type"] == "突击步枪"
 
 
 def test_delete_confirm_removes(page: MyCodesPage, monkeypatch) -> None:
@@ -314,9 +318,9 @@ def test_filter_by_gun_and_weapon(qapp, tmp_path: Path) -> None:
         codes_path=tmp_path / "my_gun_codes.json",
         guns_cache_path=cache,
     )
-    _add(page, "甲", "枪A-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
-    _add(page, "乙", "枪B-长弓溪谷-CODE2", weapon="M700狙击步枪", weapon_type="狙击步枪")
-    _add(page, "丙", "枪C-零号大坝-CODE3", weapon="M7战斗步枪", weapon_type="突击步枪")
+    _add(page, "甲", "M7战斗步枪-烽火地带-CODE1")
+    _add(page, "乙", "M700狙击步枪-长弓溪谷-CODE2")
+    _add(page, "丙", "M7战斗步枪-零号大坝-CODE3")
     assert len(page._cards) == 3
 
     # 按枪械筛选
@@ -379,8 +383,8 @@ def test_sidebar_and_pages_registered(qapp, tmp_path: Path) -> None:
 
 def test_filter_by_input_contains(page: MyCodesPage) -> None:
     """筛选框输入支持包含匹配（Beta-4.1）。"""
-    _add(page, "甲", "枪A-烽火地带-CODE1", weapon="M7战斗步枪", weapon_type="突击步枪")
-    _add(page, "乙", "枪B-长弓溪谷-CODE2", weapon="K416突击步枪", weapon_type="狙击步枪")
+    _add(page, "甲", "M7战斗步枪-烽火地带-CODE1")
+    _add(page, "乙", "M700狙击步枪-长弓溪谷-CODE2")
     page.filter_gun_combo.setEditText("M7战")
     assert len(page._cards) == 1
     page.filter_gun_combo.setEditText("")
@@ -423,3 +427,28 @@ def test_filter_labels_shown(page: MyCodesPage) -> None:
     """筛选框补齐文字提示（Beta-4.1）。"""
     assert page.filter_gun_label.text() == "枪械名称"
     assert page.filter_weapon_label.text() == "武器类型"
+
+
+def test_auto_fill_meta_from_code(page: MyCodesPage) -> None:
+    """改枪码输入实时带出枪械名与武器类型（Beta-4.2）。"""
+    page.code_input.setText("M7战斗步枪-烽火地带-CODE1")
+    assert page.weapon_input.text() == "M7战斗步枪"
+    assert page.weapon_type_input.text() == "突击步枪"
+    # 未命中映射（新枪/自定义码）：枪械名仍带出，类型留空
+    page.code_input.setText("新枪-长弓溪谷-CODE2")
+    assert page.weapon_input.text() == "新枪"
+    assert page.weapon_type_input.text() == ""
+
+
+def test_form_meta_readonly(page: MyCodesPage) -> None:
+    """枪械/类型字段只读展示，不可手动输入（Beta-4.2）。"""
+    assert page.weapon_input.isReadOnly()
+    assert page.weapon_type_input.isReadOnly()
+
+
+def test_add_persists_auto_meta(page: MyCodesPage) -> None:
+    """保存时枪械/类型以自动解析结果落盘（Beta-4.2）。"""
+    _add(page, "自动", "M700狙击步枪-长弓溪谷-CODE9")
+    record = page._records[0]
+    assert record["weapon"] == "M700狙击步枪"
+    assert record["weapon_type"] == "狙击步枪"

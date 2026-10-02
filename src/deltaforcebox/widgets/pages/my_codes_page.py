@@ -1,7 +1,8 @@
 """我的改枪码页面：本地收藏主播之外的个人改枪码（鼠鼠工具 → 改枪码 → 我的改枪码）。
 
-- 输入：命名（必填）+ 改枪码（必填，粘贴游戏内复制）+ 枪械名称 / 武器类型（可选，
-  候选与主播推荐一致）+ 描述（可选）；
+- 输入：命名（必填）+ 改枪码（必填，粘贴游戏内复制）+ 描述（可选）；
+  枪械名称与武器类型由改枪码自动解析带出（枪械名取改枪码首段，武器类型取缓存
+  从属映射），无需手动输入；
 - 展示：类主播推荐卡片（无图、无作者、无价格）：命名 + 「枪械名称 · 武器类型」
   + 描述滚动区 + 复制（gunCopy 同款）/ 修改 / 删除；
 - 筛选：枪械名称 / 武器类型双筛选框（候选同主播推荐）+ 全部重置；
@@ -16,7 +17,6 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from ...core.i18n import I18nManager
 from ...core.my_codes import (
+    build_gun_weapon_map,
     load_candidates,
     load_my_codes,
     new_code_id,
@@ -155,6 +156,7 @@ class MyCodesPage(QWidget):
         self._guns_cache_path = guns_cache_path
         self._records = load_my_codes(codes_path)
         self._candidates = load_candidates(guns_cache_path)
+        self._gun_weapon_map = build_gun_weapon_map(guns_cache_path)
         self._cards: list[MyCodeCard] = []
         self._editing_id: str | None = None
         self._card_w = CARD_WIDTH
@@ -232,17 +234,17 @@ class MyCodesPage(QWidget):
         self.weapon_label = QLabel()
         self.weapon_label.setObjectName("gunFilterLabel")
         row2.addWidget(self.weapon_label)
-        self.weapon_combo = QComboBox()
-        self.weapon_combo.setObjectName("myCodeInput")
-        self.weapon_combo.setEditable(True)  # 候选同主播推荐，也允许自定义
-        row2.addWidget(self.weapon_combo, 1)
+        self.weapon_input = QLineEdit()
+        self.weapon_input.setObjectName("myCodeInput")
+        self.weapon_input.setReadOnly(True)  # 由改枪码自动解析带出
+        row2.addWidget(self.weapon_input, 1)
         self.weapon_type_label = QLabel()
         self.weapon_type_label.setObjectName("gunFilterLabel")
         row2.addWidget(self.weapon_type_label)
-        self.weapon_type_combo = QComboBox()
-        self.weapon_type_combo.setObjectName("myCodeInput")
-        self.weapon_type_combo.setEditable(True)
-        row2.addWidget(self.weapon_type_combo, 1)
+        self.weapon_type_input = QLineEdit()
+        self.weapon_type_input.setObjectName("myCodeInput")
+        self.weapon_type_input.setReadOnly(True)  # 由枪械从属映射自动带出
+        row2.addWidget(self.weapon_type_input, 1)
         form.addLayout(row2)
 
         desc_row = QHBoxLayout()
@@ -288,6 +290,7 @@ class MyCodesPage(QWidget):
         root.addWidget(self.scroll, 1)
 
         self.scroll.installEventFilter(self)
+        self.code_input.textChanged.connect(self._auto_fill_meta)
         self.filter_gun_combo.lineEdit().textChanged.connect(lambda _t: self._render())
         self.filter_weapon_combo.lineEdit().textChanged.connect(lambda _t: self._render())
         self.retranslate()
@@ -326,6 +329,16 @@ class MyCodesPage(QWidget):
         self._flow.invalidate()
         self._flow_host.updateGeometry()
 
+    def _auto_fill_meta(self, code: str) -> None:
+        """从改枪码自动带出枪械名称与武器类型（只读展示）。
+
+        枪械名称 = 改枪码首段（parse_gun_code）；武器类型 = 缓存从属映射
+        （gun_name → weapon_type），未命中（新枪/自定义码）时留空。
+        """
+        weapon = parse_gun_code(code)[0]
+        self.weapon_input.setText(weapon)
+        self.weapon_type_input.setText(self._gun_weapon_map.get(weapon, ""))
+
     # ── 筛选 ─────────────────────────────────────────
 
     def _reset_filters(self) -> None:
@@ -356,8 +369,8 @@ class MyCodesPage(QWidget):
         self._editing_id = None
         for widget in (self.name_input, self.code_input, self.desc_input):
             widget.clear()
-        for combo in (self.weapon_combo, self.weapon_type_combo):
-            combo.setEditText("")
+        self.weapon_input.clear()
+        self.weapon_type_input.clear()
         self.form_hint.clear()
         self.form.show()
         self.name_input.setFocus()
@@ -369,8 +382,8 @@ class MyCodesPage(QWidget):
             self.form_hint.setText(self._i18n.t("mycodes.required"))
             return
         desc = self.desc_input.text().strip()
-        weapon = self.weapon_combo.currentText().strip()
-        weapon_type = self.weapon_type_combo.currentText().strip()
+        weapon = self.weapon_input.text().strip()
+        weapon_type = self.weapon_type_input.text().strip()
         now = time.strftime("%Y-%m-%d %H:%M:%S")
         if self._editing_id is not None:
             for record in self._records:
@@ -405,22 +418,11 @@ class MyCodesPage(QWidget):
         """修改模式：表单预填该条（旧记录缺字段时置空由用户补）。"""
         self._editing_id = record.get("id")
         self.name_input.setText(record.get("name") or "")
-        self.code_input.setText(record.get("code") or "")
+        self.code_input.setText(record.get("code") or "")  # textChanged 自动带出枪械/类型
         self.desc_input.setText(record.get("description") or "")
-        self._set_combo_text(self.weapon_combo, record.get("weapon") or "")
-        self._set_combo_text(self.weapon_type_combo, record.get("weapon_type") or "")
         self.form_hint.clear()
         self.form.show()
         self.name_input.setFocus()
-
-    @staticmethod
-    def _set_combo_text(combo: QComboBox, text: str) -> None:
-        """预填可编辑下拉框：命中候选选中该项，否则直接填入自定义文本。"""
-        index = combo.findText(text)
-        if index >= 0:
-            combo.setCurrentIndex(index)
-        else:
-            combo.setEditText(text)
 
     def _confirm_delete(self, record: dict) -> None:
         title = record.get("name") or record.get("code") or ""
@@ -497,10 +499,6 @@ class MyCodesPage(QWidget):
         weapons, guns = self._candidates
         self.filter_gun_combo.set_items(guns, all_text, preserve=False)
         self.filter_weapon_combo.set_items(weapons, all_text, preserve=False)
-        # 表单枪械/类型候选
-        for combo, items in ((self.weapon_combo, guns), (self.weapon_type_combo, weapons)):
-            combo.clear()
-            combo.addItems(items)
         self.empty_label.setText(self._i18n.t("mycodes.empty"))
         if self._cards:
             self._render()

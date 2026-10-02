@@ -92,3 +92,25 @@ def load_candidates(
         if gun:
             guns.add(gun)
     return sorted(weapons), sorted(guns)
+
+
+def build_gun_weapon_map(guns_cache_path: Path | None = None) -> dict[str, str]:
+    """构建枪械名称 → 武器类型从属映射（源自改枪码缓存）。
+
+    枪械名称与武器类型具有从属关系，且枪械名称可从改枪码首段解析：
+    添加改枪码时输入改枪码即可自动带出两个字段，无需手动选择。
+    缓存缺失/损坏/无方案时返回空映射。
+    """
+    from .gun_solutions import load_guns_cache
+
+    data = load_guns_cache(guns_cache_path)
+    mapping: dict[str, str] = {}
+    for item in (data.get("solutions") or []) if data else []:
+        if not isinstance(item, dict):
+            continue
+        gun = str(item.get("gun_name") or "").strip()
+        weapon = str(item.get("weapon_type") or "").strip()
+        if gun and weapon:
+            mapping[gun] = weapon
+    return mapping
+
