@@ -55,6 +55,21 @@ QPushButton#ghost {
 QPushButton#ghost:hover { background-color: #333947; }
 
 /* Combo */
+QLineEdit {
+    background-color: #2a2f3a;
+    border: 1px solid #3a3f4a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #d7dce3;
+}
+QLineEdit:focus {
+    border-color: #2d6cdf;
+}
+QLabel#myCodeText {
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    font-size: 12px;
+    color: #d7dce3;
+}
 QComboBox {
     background-color: #2a2f3a;
     border: 1px solid #3a3f4a;

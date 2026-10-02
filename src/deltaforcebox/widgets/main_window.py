@@ -29,6 +29,7 @@ from ..games.puzzle.puzzle_page import PuzzlePage
 from .pages.daily_password_page import DailyPasswordPage
 from .pages.gun_code_page import GunCodePage
 from .pages.home_page import HomePage
+from .pages.my_codes_page import MyCodesPage
 from .pages.settings_page import SettingsPage
 
 # 侧边栏可调宽度边界（最小宽度需容纳标题“鼠鼠大王工具箱”完整显示）
@@ -47,7 +48,14 @@ SIDEBAR_ITEMS = (
         "sidebar.tools",
         (
             ("daily_password", "sidebar.daily_password"),
-            ("gun_code", "sidebar.gun_code", (("anchor", "sidebar.anchor"),)),
+            (
+                "gun_code",
+                "sidebar.gun_code",
+                (
+                    ("anchor", "sidebar.anchor"),
+                    ("my_codes", "sidebar.my_codes"),
+                ),
+            ),
         ),
     ),
     ("settings", "sidebar.settings", ()),
@@ -145,6 +153,7 @@ class MainWindow(QMainWindow):
                 sync_interval_days=self._gun_sync_interval_days,
                 render_page_size=self._gun_render_page_size,
             ),
+            "my_codes": MyCodesPage(i18n, theme),
             "settings": SettingsPage(i18n, theme, settings_path=self._settings_path),
         }
         for key, page in self.pages.items():

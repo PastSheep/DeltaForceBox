@@ -18,7 +18,7 @@ def test_main_window_builds(qapp):
     assert window.app_title_label.text() == i18n.t("app.title")
     # 一级项：首页 / 小游戏 / 鼠鼠工具 / 设置
     assert window.sidebar.topLevelItemCount() == 4
-    assert window.stack.count() == 5
+    assert window.stack.count() == 6
 
 
 def test_startup_home_selected_and_highlighted(qapp):
@@ -47,8 +47,9 @@ def test_sidebar_structure_with_group(qapp):
     assert tools.child(0).text(0) == i18n.t("sidebar.daily_password")
     gun_group = tools.child(1)
     assert gun_group.text(0) == i18n.t("sidebar.gun_code")
-    assert gun_group.childCount() == 1
+    assert gun_group.childCount() == 2
     assert gun_group.child(0).text(0) == i18n.t("sidebar.anchor")
+    assert gun_group.child(1).text(0) == i18n.t("sidebar.my_codes")
     assert sidebar.topLevelItem(3).text(0) == i18n.t("sidebar.settings")
 
     # 分组默认收起（用户点击展开），且分组项不可选中
