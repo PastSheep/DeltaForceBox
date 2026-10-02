@@ -446,3 +446,31 @@ QPushButton#myCodeDelete {
 QPushButton#myCodeDelete:hover {
     background: rgba(217, 48, 37, 0.10);
 }
+
+/* 首页右上角提示条（非弹窗更新/状态提示） */
+QFrame#noticeBar {
+    background: #f1f5f9;
+    border: 1px solid #d8dee9;
+    border-radius: 6px;
+}
+QLabel#noticeMessage {
+    color: #3d4a5c;
+    font-size: 12px;
+}
+QPushButton#noticeAction {
+    background: transparent;
+    border: none;
+    color: #4d8ff7;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 0 4px;
+}
+QPushButton#noticeAction:hover { text-decoration: underline; }
+QPushButton#noticeClose {
+    background: transparent;
+    border: none;
+    color: #7a8699;
+    font-size: 14px;
+    padding: 0;
+}
+QPushButton#noticeClose:hover { color: #111827; }

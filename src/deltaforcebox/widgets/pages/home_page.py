@@ -5,11 +5,17 @@ from __future__ import annotations
 import html
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ... import __version__
 from ...core.changelog import load_latest_update
 from ...core.i18n import I18nManager
+from ..notice_bar import NoticeBar
 
 # 作者署名与联系邮箱（邮箱可点击写信）
 AUTHOR_NAME = "PastSheep"
@@ -27,6 +33,13 @@ class HomePage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
+
+        # 顶部行：欢迎标题（左）+ 右上角提示条（右）
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(8)
+        self.notice_bar = NoticeBar()
+        self.notice_bar.hide()
 
         self.welcome_label = QLabel()
         self.welcome_label.setAlignment(Qt.AlignLeft)
@@ -59,7 +72,9 @@ class HomePage(QWidget):
         self.update_body_label.setWordWrap(True)
         self.update_body_label.setTextFormat(Qt.TextFormat.RichText)
 
-        layout.addWidget(self.welcome_label)
+        top_row.addWidget(self.welcome_label, 1)
+        top_row.addWidget(self.notice_bar, 0, Qt.AlignTop)
+        layout.addLayout(top_row)
         layout.addSpacing(8)
         layout.addWidget(self.desc_label)
         layout.addWidget(self.version_label)

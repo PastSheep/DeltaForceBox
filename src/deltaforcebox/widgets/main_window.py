@@ -31,6 +31,12 @@ from .pages.gun_code_page import GunCodePage
 from .pages.home_page import HomePage
 from .pages.my_codes_page import MyCodesPage
 from .pages.settings_page import SettingsPage
+from .update_controller import (
+    ACTION_DOWNLOAD,
+    ACTION_RETRY,
+    ACTION_RUN,
+    UpdateController,
+)
 
 # 侧边栏可调宽度边界（最小宽度需容纳标题“鼠鼠大王工具箱”完整显示）
 SIDEBAR_MIN_WIDTH = 160
@@ -194,8 +200,41 @@ class MainWindow(QMainWindow):
         )
         # 不显示系统标题栏文本（保留最小化/关闭按钮，品牌名见侧栏顶部）
         self.setWindowTitle("")
+        self._init_updater()
         self.retranslate()
         self.resize(980, 680)
+        # 启动时检查更新（后台线程；按设置模式决定检查/下载/静默）
+        self._updater.check_on_start()
+
+    # ── 自动更新 ────────────────────────────────────────────
+
+    def _init_updater(self) -> None:
+        """创建更新控制器并接线：信号 → 首页右上角提示条。"""
+        self._updater = UpdateController(self)
+        self._updater.notice.connect(self._on_update_notice)
+        self._updater.progress.connect(self._on_update_progress)
+
+    def _on_update_notice(self, text: str, action: object) -> None:
+        """更新通知 → 首页提示条（非弹窗）；空文本表示静默，隐藏提示。"""
+        bar = self.pages["home"].notice_bar
+        if not text:
+            bar.hide_notice()
+            return
+        if action == ACTION_DOWNLOAD:
+            bar.show_notice(
+                text, "下载", on_action=self._updater.download_candidate
+            )
+        elif action == ACTION_RUN:
+            bar.show_notice(
+                text, "打开位置", on_action=self._updater.open_installer_location
+            )
+        elif action == ACTION_RETRY:
+            bar.show_notice(text, "重试", on_action=self._updater.retry)
+        else:
+            bar.show_notice(text)
+
+    def _on_update_progress(self, text: str, done: int, total: int) -> None:
+        self.pages["home"].notice_bar.show_progress(text, done, total)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -325,6 +364,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         """关闭窗口前收尾各页面的后台线程（QThread 运行时被回收会崩溃）。"""
+        # auto 模式下如有待安装更新：拉起安装器（独立进程，主程序退出后继续）
+        self._updater.on_app_close()
         for page in self.pages.values():
             close = getattr(page, "_shutdown", None)
             if callable(close):

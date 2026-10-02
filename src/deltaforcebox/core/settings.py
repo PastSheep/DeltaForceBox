@@ -25,10 +25,14 @@ DEFAULT_SETTINGS: dict[str, str | int | list[str]] = {
     # 每日密码来源优先级（顺序即优先级，靠前者优先尝试）：
     # 可在设置界面更改首选来源，也可在配置文件中手改完整顺序
     "password_source_order": ["tmini", "shushu_fan"],
+    # 自动更新模式（启动时检查）：
+    # auto=自动更新（下载完成，退出时静默安装）/ download_only=下载但不自动安装
+    # notify=新版本提示（点击后才下载）/ off=关闭
+    "update_mode": "auto",
 }
 
 # 隐藏配置默认值（仅修改 resources/config/app_config.json，不在设置界面显示）
-DEFAULT_APP_CONFIG: dict[str, int] = {
+DEFAULT_APP_CONFIG: dict[str, object] = {
     # 拼图目标碎片数：控制开局碎片多少，取值 [4, 200]，默认 48
     "puzzle_pieces": 48,
     # 改枪码同步间隔（天）：控制从 shushu.fan 拉取主播推荐方案的频率，默认 10 天
@@ -37,6 +41,11 @@ DEFAULT_APP_CONFIG: dict[str, int] = {
     "image_cache_limit_mb": 64,
     # 改枪码每页卡片数：越小每页渲染/首屏越快、图片下载越分散，默认 20
     "gun_render_page_size": 20,
+    # 自动更新镜像列表（整 URL 代理形态，如 "https://ghproxy.net/"）：
+    # 直连 github.com 失败时按序静默降级尝试；可手改增删
+    "update_mirrors": ["https://ghproxy.net/", "https://mirror.ghproxy.com/"],
+    # 自动更新网络请求超时（秒）
+    "update_timeout_s": 8,
 }
 
 
@@ -72,7 +81,7 @@ def save_settings(
     tmp.replace(settings_path)
 
 
-def load_app_config(path: Path | None = None) -> dict[str, int]:
+def load_app_config(path: Path | None = None) -> dict[str, object]:
     """读取隐藏配置（resources/config/app_config.json）。
 
     - 文件缺失时自动写入默认文件（便于用户发现并手改）；
