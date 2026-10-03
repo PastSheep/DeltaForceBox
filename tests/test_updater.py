@@ -32,12 +32,12 @@ def test_parse_version(text: str, expected: object) -> None:
 
 
 def test_is_newer_than_local() -> None:
-    """与本地 __version__（Beta-5.3）比较：更高/同版本/正式版判定。"""
+    """与本地 __version__（Beta-5.4）比较：更高/同版本/正式版判定。"""
     from deltaforcebox import __version__ as local_version
 
-    assert local_version == "Beta-5.3"
-    assert updater.is_newer((0, 5, 4))
-    assert not updater.is_newer((0, 5, 3))
+    assert local_version == "Beta-5.4"
+    assert updater.is_newer((0, 5, 5))
+    assert not updater.is_newer((0, 5, 4))
     assert not updater.is_newer((0, 4, 9))
     assert updater.is_newer((1, 1, 0))  # 正式版高于所有 Beta
 
@@ -119,8 +119,8 @@ def test_fetch_latest_tolerates_bad_asset_size(monkeypatch) -> None:
     """#2/#13 回归：资产 size 非数字不崩，回退 0。"""
     data = [
         {
-            "tag_name": "Beta-5.3",
-            "assets": [{"name": "DeltaForceBox-Setup-Beta-5.3.exe",
+            "tag_name": "Beta-5.4",
+            "assets": [{"name": "DeltaForceBox-Setup-Beta-5.4.exe",
                         "browser_download_url": "https://example.com/x.exe",
                         "size": "oops"}],
         }
