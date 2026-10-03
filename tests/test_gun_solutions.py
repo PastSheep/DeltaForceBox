@@ -235,6 +235,30 @@ def test_image_paths_under_dir(tmp_path: Path) -> None:
     assert avatar_image_path("主播", tmp_path) == tmp_path / "avatar_主播.png"
 
 
+def test_avatar_image_path_sanitizes_invalid_chars(tmp_path: Path) -> None:
+    """#4 回归：昵称含 Windows 非法字符时文件名安全化（不写盘失败/落子目录）。"""
+    assert avatar_image_path("a/b", tmp_path).name == "avatar_a_b.png"
+    assert avatar_image_path("bad:name*", tmp_path).name == "avatar_bad_name_.png"
+    assert avatar_image_path("...", tmp_path).name == "avatar_unknown.png"
+
+
+def test_parse_solution_obj_guards_non_numeric_ids() -> None:
+    """#7 回归：armsID/id/authorID 非数字不抛异常（单条异常不拖垮同步）。"""
+    from deltaforcebox.core.gun_solutions import _parse_solution_obj
+
+    obj = {
+        "authorDetail": {"nickname": "主播"},
+        "armsID": "notnum",
+        "id": "notnum",
+        "authorID": "notnum",
+    }
+    s = _parse_solution_obj(obj, {})
+    assert s is not None
+    assert s.id == 0
+    assert s.author_id == 0
+    assert s.gun_name == ""
+
+
 # ── 分页 JSON API（全量同步）─────────────────────────
 
 def _api_item(

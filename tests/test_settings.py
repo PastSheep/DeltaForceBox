@@ -99,6 +99,18 @@ def test_load_app_config_defaults(tmp_path):
     assert json.loads(cfg.read_text(encoding="utf-8")) == DEFAULT_APP_CONFIG
 
 
+def test_safe_int_guards():
+    """#2 回归：隐藏配置整型归一化（非法/越界回退，不中断启动）。"""
+    from deltaforcebox.core.settings import safe_int
+
+    assert safe_int("abc", 8) == 8
+    assert safe_int(None, 8) == 8
+    assert safe_int(0, 8, 1, 120) == 1
+    assert safe_int(999, 8, 1, 120) == 120
+    assert safe_int("16", 8) == 16
+    assert safe_int(48, 48, 4, 200) == 48
+
+
 def test_load_app_config_corrupt_falls_back(tmp_path):
     """隐藏配置损坏（JSON 解析失败）时回退默认值，不中断。"""
     cfg = tmp_path / "app_config.json"

@@ -230,6 +230,38 @@ def test_normalize_source_order():
     assert normalize_source_order(["tmini", "tmini", "shushu_fan"]) == ("tmini", "shushu_fan")
 
 
+def test_normalize_source_order_type_guard():
+    """#8 回归：非列表/元组类型（如手改成整数）回退默认顺序，不抛 TypeError。"""
+    assert normalize_source_order(42) == DEFAULT_SOURCE_ORDER
+    assert normalize_source_order("tmini") == DEFAULT_SOURCE_ORDER
+
+
+def test_fetch_password_should_stop():
+    """#1 回归：should_stop 置位时中止拉取（窗口关闭时快速收尾后台线程）。"""
+    calls: list[int] = []
+
+    def fetcher(timeout):
+        calls.append(timeout)
+        return DailyPasswordData(
+            source="tmini",
+            update_date="10月01日每日密码已更新",
+            passwords={"零号大坝": "1234"},
+        )
+
+    order = ("tmini", "shushu_fan")
+    table = {"tmini": fetcher, "shushu_fan": fetcher}
+    stopped = False
+    result = fetch_password(order, fetchers=table, should_stop=lambda: stopped)
+    assert result is not None
+    assert len(calls) == 1
+
+    calls.clear()
+    stopped = True
+    result2 = fetch_password(order, fetchers=table, should_stop=lambda: stopped)
+    assert result2 is None
+    assert calls == []  # 首个源尝试前即中止
+
+
 # ── 页面 ───────────────────────────────────────────────
 
 @pytest.fixture()

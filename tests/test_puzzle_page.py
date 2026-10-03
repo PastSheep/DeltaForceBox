@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
 from PySide6.QtWidgets import QApplication
 
@@ -13,6 +11,7 @@ from deltaforcebox.core.i18n import I18nManager
 from deltaforcebox.core.theme import ThemeManager
 from deltaforcebox.games.puzzle.puzzle_page import PuzzlePage
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 @pytest.fixture(scope="module")
 def app():
@@ -129,6 +128,24 @@ def test_piece_count_normalization(app):
     assert _normalize_piece_count("16") == 16
 
 
+def test_pick_random_image_skips_corrupt(tmp_path):
+    """#3 回归：损坏图片被跳过（防止零尺寸除零崩溃）。"""
+    from PySide6.QtGui import QColor, QImage
+
+    from deltaforcebox.games.puzzle.image_source import PuzzleImage, pick_random_image
+
+    good = tmp_path / "good.png"
+    img = QImage(64, 64, QImage.Format.Format_RGB32)
+    img.fill(QColor("#ffffff"))
+    assert img.save(str(good))
+    bad = tmp_path / "bad.png"
+    bad.write_bytes(b"\x89PNG this is not a real png")
+    images = [
+        PuzzleImage(path=bad, author="A", author_url=None),
+        PuzzleImage(path=good, author="B", author_url=None),
+    ]
+    picked = pick_random_image(images)
+    assert picked.path == good
 def test_restart_rebuilds(page):
     """重新开始后碎片重建且都在场景中。"""
     page.start_new()
