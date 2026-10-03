@@ -1,14 +1,14 @@
-@echo off
+ï»¿@echo off
 setlocal
 cd /d "%~dp0"
-title ÊóÊó´óÍõ¹¤¾ßÏä
+title é¼ é¼ å¤§ç‹å·¥å…·ç®±
 
 set "PY=.venv\Scripts\python.exe"
 set "PYW=.venv\Scripts\pythonw.exe"
 
-rem ---- ½¡¿µ¼ì²é£ºĞéÄâ»·¾³ ----
+rem ---- å¥åº·æ£€æŸ¥ï¼šè™šæ‹Ÿç¯å¢ƒ ----
 if not exist "%PY%" (
-    echo [´íÎó] Î´ÕÒµ½ĞéÄâ»·¾³ .venv£¬ÇëÏÈ³õÊ¼»¯£º
+    echo [é”™è¯¯] æœªæ‰¾åˆ°è™šæ‹Ÿç¯å¢ƒ .venvï¼Œè¯·å…ˆåˆå§‹åŒ–ï¼š
     echo     python -m venv .venv
     echo     .venv\Scripts\python -m pip install -e ".[dev]"
     echo.
@@ -16,16 +16,16 @@ if not exist "%PY%" (
     exit /b 1
 )
 
-rem ---- ½¡¿µ¼ì²é£ºÏîÄ¿ÒÑ°²×° ----
+rem ---- å¥åº·æ£€æŸ¥ï¼šé¡¹ç›®å·²å®‰è£… ----
 "%PY%" -c "import deltaforcebox" >nul 2>&1
 if errorlevel 1 (
-    echo [´íÎó] ÏîÄ¿ÉĞÎ´°²×°£¬ÇëÏÈÖ´ĞĞ£º
+    echo [é”™è¯¯] é¡¹ç›®å°šæœªå®‰è£…ï¼Œè¯·å…ˆæ‰§è¡Œï¼š
     echo     .venv\Scripts\python -m pip install -e ".[dev]"
     echo.
     pause
     exit /b 1
 )
 
-rem ---- ÎŞ¿ØÖÆÌ¨´°¿ÚÆô¶¯ GUI ----
+rem ---- æ— æ§åˆ¶å°çª—å£å¯åŠ¨ GUI ----
 start "" "%PYW%" -m deltaforcebox.main
 exit /b 0
