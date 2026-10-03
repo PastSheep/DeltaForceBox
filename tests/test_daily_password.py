@@ -240,10 +240,15 @@ def i18n_theme():
 
 
 def _sample_data(source: str = "tmini") -> DailyPasswordData:
+    # 日期动态化为「今天」：页面级测试依赖"当日缓存新鲜"语义，
+    # 硬编码固定日期会在跨天后导致误判过期并触发拉取（测试脆弱性）。
+    from datetime import datetime
+
+    now = datetime.now()
     return DailyPasswordData(
         source=source,
-        update_date="10月02日每日密码已更新",
-        updated_at="2026-10-02 00:05:01",
+        update_date=f"{now.month}月{now.day:02d}日每日密码已更新",
+        updated_at=now.strftime("%Y-%m-%d %H:%M:%S"),
         passwords={
             "零号大坝": "2581",
             "长弓溪谷": "2715",
@@ -358,7 +363,10 @@ def test_page_throttles_when_fetch_returns_stale(qapp, i18n_theme, tmp_path):
     i18n, theme = i18n_theme
     cache = tmp_path / "cache.json"
     stale = _sample_data()
-    stale.update_date = "10月01日每日密码已更新"  # 非今日
+    from datetime import datetime, timedelta
+
+    yesterday = datetime.now() - timedelta(days=1)
+    stale.update_date = f"{yesterday.month}月{yesterday.day:02d}日每日密码已更新"  # 非今日
 
     def fake(timeout):
         return stale

@@ -34,9 +34,23 @@ def test_click_opens_popup(qapp) -> None:
         Qt.KeyboardModifier.NoModifier,
     )
     combo.eventFilter(combo.lineEdit(), event)
-    assert combo.view().isVisible()  # showPopup 显示 combo 自带 view
-    assert combo.view().model().rowCount() == combo.count()  # 全量候选
+    popup = combo.completer().popup()
+    assert popup.isVisible()  # 展开的是 completer 统一弹层
+    assert popup.model().rowCount() == combo.count()  # 全量候选
     assert combo.currentText() == ""  # 点击即清空条件
+    assert not combo.view().isVisible()  # combo 自带 view 不显示（单一弹层）
+
+
+def test_single_popup_layer(qapp) -> None:
+    """弹层统一：点击展开与输入过滤复用同一 completer popup（无双弹层并存）。"""
+    from PySide6.QtGui import QFocusEvent
+
+    combo = _make_combo(qapp)
+    combo.eventFilter(combo.lineEdit(), QFocusEvent(QEvent.Type.FocusIn))
+    popup = combo.completer().popup()
+    assert popup.isVisible()
+    assert combo.completer().popup() is popup  # 输入过滤仍是同一弹层
+    assert not combo.view().isVisible()  # 自带 view 不参与显示
 
 
 def test_focus_in_opens_popup(qapp) -> None:
@@ -46,12 +60,12 @@ def test_focus_in_opens_popup(qapp) -> None:
     combo = _make_combo(qapp)
     combo.setEditText("M7战斗步枪")
     combo.eventFilter(combo.lineEdit(), QFocusEvent(QEvent.Type.FocusIn))
-    assert combo.view().isVisible()
+    assert combo.completer().popup().isVisible()
     assert combo.currentText() == "M7战斗步枪"  # 已有筛选不被打断
     combo.eventFilter(combo.lineEdit(), QFocusEvent(QEvent.Type.FocusOut))
     combo.setEditText("全部")  # 无条件提示态
     combo.eventFilter(combo.lineEdit(), QFocusEvent(QEvent.Type.FocusIn))
-    assert combo.view().isVisible()
+    assert combo.completer().popup().isVisible()
     assert combo.currentText() == ""  # 无条件提示 -> 清空准备输入
 
 

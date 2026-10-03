@@ -29,6 +29,18 @@ class SearchCombo(QComboBox):
         # 通过事件过滤器拦截左键点击与焦点变化。
         self.lineEdit().installEventFilter(self)
 
+    def _show_candidates(self) -> None:
+        """展开全量候选：复用 completer 过滤弹层（单一弹层）。
+
+        输入时 completer 自动弹出的过滤列表与这里展开的是同一个 popup；
+        空前缀 = 不过滤 = 全量候选（顶部「全部」+ 全部候选项）。
+        不使用 QComboBox::showPopup()（它弹的是 combo 自带 view，会与
+        completer 弹层并存冲突），也不 setView(completer.popup())
+        （popup 由 completer 持有所有权，setView 后析构会双重删除崩溃）。
+        """
+        self.completer().setCompletionPrefix("")
+        self.completer().complete()
+
     def eventFilter(self, obj, event) -> bool:  # noqa: N802 - Qt 命名
         """拦截输入框左键点击 / 焦点变化：点击清空并弹出全量候选。
 
@@ -41,12 +53,12 @@ class SearchCombo(QComboBox):
             if t == QEvent.Type.MouseButtonPress:
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.lineEdit().setText("")
-                    self.showPopup()
+                    self._show_candidates()
                 return False  # 交还 lineEdit 默认处理（聚焦/光标）
             if t == QEvent.Type.FocusIn:
                 if not self.filter_text():
                     self.lineEdit().setText("")  # 无条件提示 -> 清空准备输入
-                self.showPopup()
+                self._show_candidates()
                 return False
             if t == QEvent.Type.FocusOut:
                 if not self.filter_text():
@@ -61,7 +73,7 @@ class SearchCombo(QComboBox):
         """点击下拉按键区域（若样式保留）：同样清空输入并展开全量候选。"""
         if event.button() == Qt.MouseButton.LeftButton:
             self.lineEdit().setText("")
-            self.showPopup()
+            self._show_candidates()
             return
         super().mousePressEvent(event)
 

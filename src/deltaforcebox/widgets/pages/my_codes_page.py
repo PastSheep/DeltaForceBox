@@ -342,9 +342,17 @@ class MyCodesPage(QWidget):
     # ── 筛选 ─────────────────────────────────────────
 
     def _reset_filters(self) -> None:
-        """全部重置：清空两个筛选框输入（textChanged 自动驱动渲染）。"""
-        self.filter_gun_combo.reset()
-        self.filter_weapon_combo.reset()
+        """全部重置：清空两个筛选框输入（重建期间屏蔽信号，结束后统一渲染一次）。"""
+        combos = (self.filter_gun_combo, self.filter_weapon_combo)
+        for combo in combos:
+            combo.lineEdit().blockSignals(True)
+        try:
+            self.filter_gun_combo.reset()
+            self.filter_weapon_combo.reset()
+        finally:
+            for combo in combos:
+                combo.lineEdit().blockSignals(False)
+        self._render()
 
     def _filtered_records(self) -> list[dict]:
         gun = self.filter_gun_combo.filter_text()

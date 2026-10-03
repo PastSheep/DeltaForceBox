@@ -687,9 +687,18 @@ class GunCodePage(QWidget):
         self.status_label.setText(" · ".join(parts))
 
     def _on_reset_filters(self) -> None:
-        """全部重置：清空四个筛选框输入（textChanged 自动驱动筛选）。"""
-        for combo in self._filter_combos.values():
-            combo.reset()
+        """全部重置：清空四个筛选框输入（重建期间屏蔽信号，结束后统一筛选一次）。"""
+        combos = list(self._filter_combos.values())
+        for combo in combos:
+            combo.lineEdit().blockSignals(True)
+        try:
+            for combo in combos:
+                combo.reset()
+        finally:
+            for combo in combos:
+                combo.lineEdit().blockSignals(False)
+        # 武器类型无条件 -> 联动刷新枪械候选（保留枪械输入）并统一筛选一次
+        self._on_weapon_changed("")
 
     def _render_filtered(self, stale: bool = False) -> None:
         """应用当前筛选渲染（筛选状态已存在下拉框时）。"""
