@@ -14,6 +14,7 @@ from .core.settings import (
     DEFAULT_APP_CONFIG,
     load_app_config,
     load_settings,
+    safe_int,
     save_settings,
 )
 from .core.theme import DEFAULT_THEME, ThemeManager
@@ -60,13 +61,25 @@ def build_app(
     theme.changed.connect(_persist)
     i18n.changed.connect(_persist)
 
-    puzzle_pieces = int(config.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES))
+    # 隐藏配置统一经 safe_int 归一化：用户手改 app_config.json 为任意
+    # 内容（非数字 / 越界）都不会导致程序无法启动（开发规范：消费侧
+    # 必须做边界归一化，非法 / 越界回退到安全值）
+    puzzle_pieces = safe_int(
+        config.get("puzzle_pieces", DEFAULT_PUZZLE_PIECES),
+        DEFAULT_PUZZLE_PIECES,
+        4,
+        200,
+    )
     password_sources = normalize_source_order(settings.get("password_source_order"))
-    gun_sync_interval_days = int(config.get("gun_sync_interval_days", 10))
-    gun_render_page_size = int(config.get("gun_render_page_size", 20))
+    gun_sync_interval_days = safe_int(
+        config.get("gun_sync_interval_days", 10), 10, 1, 90
+    )
+    gun_render_page_size = safe_int(
+        config.get("gun_render_page_size", 20), 20, 1, 200
+    )
     # 改枪码图片内存缓存上限（MB）：全局 LRU，仅隐藏配置修改
-    image_cache_limit_mb = int(config.get("image_cache_limit_mb", 64))
-    QPixmapCache.setCacheLimit(max(0, image_cache_limit_mb) * 1024)
+    image_cache_limit_mb = safe_int(config.get("image_cache_limit_mb", 64), 64, 0, 4096)
+    QPixmapCache.setCacheLimit(image_cache_limit_mb * 1024)
     window = MainWindow(
         i18n,
         theme,

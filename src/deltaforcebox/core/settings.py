@@ -63,6 +63,27 @@ def load_settings(path: Path | None = None) -> dict[str, str | int | list[str]]:
     return values
 
 
+def safe_int(
+    value: object, default: int, lo: int | None = None, hi: int | None = None
+) -> int:
+    """隐藏配置整型归一化：非法 / 越界回退到安全值（不中断启动）。
+
+    - 非数字（字符串、None、bool 外的类型）→ default；
+    - 数值越界 → clamp 到 [lo, hi]（lo/hi 提供时）；
+    - 供 app.py / updater.py 消费隐藏配置使用；用户手改 app_config.json
+      为任意内容都不会导致程序无法启动。
+    """
+    try:
+        n = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    if lo is not None and n < lo:
+        return lo
+    if hi is not None and n > hi:
+        return hi
+    return n
+
+
 def save_settings(
     values: dict[str, str | int | list[str]], path: Path | None = None
 ) -> None:

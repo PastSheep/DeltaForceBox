@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .. import __version__
 from .paths import DATA_DIR
-from .settings import load_app_config
+from .settings import load_app_config, safe_int
 
 # GitHub 仓库（公开后无需认证）
 REPO = "PastSheep/DeltaForceBox"
@@ -115,7 +115,7 @@ def fetch_latest_release() -> ReleaseInfo | None:
     - 无可用 Release / 网络全失败 / 均不可解析 → None。
     """
     config = load_app_config()
-    timeout = int(config.get("update_timeout_s") or 8)
+    timeout = safe_int(config.get("update_timeout_s"), 8, 1, 120)
     data = _request_json(_mirror_urls(API_RELEASES_URL), timeout)
     if not isinstance(data, list):
         return None
@@ -123,6 +123,9 @@ def fetch_latest_release() -> ReleaseInfo | None:
     best: ReleaseInfo | None = None
     for item in data:
         if not isinstance(item, dict):
+            continue
+        # 草稿/预发布（draft/prerelease）不应被选中：tag 可能高于正式发布
+        if item.get("draft") or item.get("prerelease"):
             continue
         version = parse_version(str(item.get("tag_name") or ""))
         if version is None:
@@ -136,7 +139,7 @@ def fetch_latest_release() -> ReleaseInfo | None:
                 asset = ReleaseAsset(
                     name=name,
                     url=str(a.get("browser_download_url") or ""),
-                    size=int(a.get("size") or 0),
+                    size=safe_int(a.get("size"), 0, 0),
                 )
                 break
         candidate = ReleaseInfo(
@@ -173,7 +176,7 @@ def download_asset(
     progress：可选回调 progress(downloaded, total)，总大小未知时 total=0。
     """
     config = load_app_config()
-    timeout = int(config.get("update_timeout_s") or 8)
+    timeout = safe_int(config.get("update_timeout_s"), 8, 1, 120)
     dest_dir.mkdir(parents=True, exist_ok=True)
     part_path = dest_dir / (asset.name + ".part")
     final_path = dest_dir / asset.name
