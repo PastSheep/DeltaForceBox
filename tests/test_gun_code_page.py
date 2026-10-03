@@ -16,6 +16,7 @@ from deltaforcebox.core.gun_solutions import (
 from deltaforcebox.widgets.pages.gun_code_page import (
     DESC_AREA_HEIGHT,
     GunCodePage,
+    _solution_from_dict,
 )
 
 FIXTURE = Path(__file__).parent / "data" / "guns_sample.html"
@@ -478,3 +479,12 @@ def test_filter_linkage_by_input(page: GunCodePage) -> None:
     ]
     assert "全部" in guns  # 顶部「全部」文本项（内部=无条件）
     assert "M700狙击步枪" in guns
+
+def test_solution_from_dict_guards_id():
+    """C 回归：id 缺失/非法跳过该条；author_id 非数字归一为 0。"""
+    assert _solution_from_dict({"id": "abc", "name": "x"}) is None
+    assert _solution_from_dict({"id": 0, "name": "x"}) is None
+    assert _solution_from_dict({"id": -3, "name": "x"}) is None
+    ok = _solution_from_dict({"id": 7, "name": "x", "author_id": "oops"})
+    assert ok is not None and ok.id == 7
+    assert ok.author_id == 0

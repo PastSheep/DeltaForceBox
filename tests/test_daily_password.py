@@ -780,3 +780,20 @@ def test_sidebar_contains_tools_group(qapp, i18n_theme):
     assert "tools" in keys
     assert "daily_password" in keys
     window.close()
+
+# ── 后台线程注册表（防 A 回归：请求进行中关闭窗口，线程被持有到自然结束）──
+
+def test_track_worker_registers_then_removes(qapp):
+    """_track_worker 登记运行中的线程，finished 后自动移除。"""
+    from deltaforcebox.widgets.pages import daily_password_page as mod
+
+    def boom(timeout):
+        raise ValueError("network down")
+
+    worker = mod._FetchWorker(("tmini",), fetchers={"tmini": boom})
+    mod._track_worker(worker)
+    assert worker in mod._ACTIVE_WORKERS
+    worker.start()
+    assert worker.wait(5000)
+    qapp.processEvents()
+    assert worker not in mod._ACTIVE_WORKERS

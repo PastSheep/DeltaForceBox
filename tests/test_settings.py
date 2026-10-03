@@ -13,6 +13,7 @@ from deltaforcebox.core.settings import (
     DEFAULT_SETTINGS,
     load_app_config,
     load_settings,
+    safe_int,
     save_settings,
 )
 
@@ -237,3 +238,9 @@ def test_build_app_passes_render_page_size(qapp, tmp_path):
     config_path.write_text(json.dumps({"gun_render_page_size": 25}), encoding="utf-8")
     _app, window = build_app(settings_path=tmp_path / "settings.json", config_path=config_path)
     assert window.pages["anchor"]._page_size == 25
+
+def test_safe_int_rejects_bool():
+    """bool 是 int 子类：True/False 不应被 int() 转成 1/0，直接回退默认。"""
+    assert safe_int(True, 48, 4, 200) == 48
+    assert safe_int(False, 48, 4, 200) == 48
+    assert safe_int(0, 48, 4, 200) == 4  # 普通 0 仍走 clamp
