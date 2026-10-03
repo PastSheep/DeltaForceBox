@@ -98,6 +98,26 @@ def resolve_map_image(name: str) -> Path | None:
     return None
 
 
+# 运行中的后台线程注册表：持有 QThread 引用，防止页面被回收时线程仍在运行
+# 导致 "QThread: Destroyed while thread is still running" 硬崩溃（0xC0000409）。
+# _shutdown 限时等待后若请求仍进行中（HTTP 最长 FETCH_TIMEOUT=10s），线程由
+# 注册表持有到自然结束再移除，窗口关闭不会回收运行中的 QThread。
+_ACTIVE_WORKERS: list[QThread] = []
+
+
+def _track_worker(worker: QThread) -> None:
+    """登记后台线程；finished 后自动移除。"""
+    _ACTIVE_WORKERS.append(worker)
+
+    def _on_done() -> None:
+        try:
+            _ACTIVE_WORKERS.remove(worker)
+        except ValueError:
+            pass
+
+    worker.finished.connect(_on_done)
+
+
 class _FetchWorker(QThread):
     """后台拉取线程：按优先级尝试各来源，成功/失败各发一个信号。"""
 
@@ -621,6 +641,7 @@ class DailyPasswordPage(QWidget):
         self.refresh_button.setEnabled(False)
         self.status_label.setText(self._i18n.t("dailypwd.loading"))
         self._worker = _FetchWorker(self._order, self._fetchers)
+        _track_worker(self._worker)
         self._worker.ok.connect(self._on_fetch_ok)
         self._worker.fail.connect(self._on_fetch_fail)
         self._worker.finished.connect(self._on_worker_finished)
@@ -629,12 +650,16 @@ class DailyPasswordPage(QWidget):
     def _shutdown(self) -> None:
         """请求后台拉取线程停止并等待，避免 QThread 运行时被回收（窗口关闭时调用）。
 
-        由 MainWindow.closeEvent 统一遍历页面调用（getattr 兜底）；
-        fetch_password 支持 should_stop，中断请求后线程快速退出。
+        由 MainWindow.closeEvent 统一遍历页面调用（getattr 兜底）。
+        组合策略（防 0xC0000409 硬崩溃）：
+        - _ACTIVE_WORKERS 注册表持有 worker：页面回收不会立即析构运行中的 QThread；
+        - wait 上限取 FETCH_TIMEOUT + 余量：请求进行中关闭时阻塞等待其自然结束，
+          确保进程退出前线程已 finished（慢请求最长 FETCH_TIMEOUT=10s，正常请求
+          1-2s 内完成，wait 在 finished 时立即返回，不额外卡顿）。
         """
         if self._worker is not None and self._worker.isRunning():
             self._worker.requestInterruption()
-            self._worker.wait(2000)
+            self._worker.wait(FETCH_TIMEOUT * 1000 + 2000)
 
     def _on_fetch_ok(self, data: DailyPasswordData) -> None:
         save_cache(data, self._cache_file)
