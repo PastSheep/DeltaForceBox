@@ -1,6 +1,16 @@
 """自动更新核心逻辑测试：版本解析、Release 检查、断点续传、pending 状态。"""
 
-from __future__ import annotationsimport threadingfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServerfrom pathlib import Pathimport pytestfrom deltaforcebox.core import updater# ── 版本解析与比较 ─────────────────────────────────────────
+from __future__ import annotations
+
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+import pytest
+
+from deltaforcebox.core import updater
+
+# ── 版本解析与比较 ─────────────────────────────────────────
 
 @pytest.mark.parametrize(
     ("text", "expected"),

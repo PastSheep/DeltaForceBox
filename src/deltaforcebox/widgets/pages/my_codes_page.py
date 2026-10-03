@@ -9,7 +9,39 @@
 - 持久化：data/my_gun_codes.json（缺失/损坏回退空列表）。
 """
 
-from __future__ import annotationsimport timefrom pathlib import Pathfrom PySide6.QtCore import QEvent, Qt, QTimerfrom PySide6.QtWidgets import (    QApplication,    QFrame,    QHBoxLayout,    QLabel,    QLineEdit,    QMessageBox,    QPushButton,    QScrollArea,    QVBoxLayout,    QWidget,)from ...core.i18n import I18nManagerfrom ...core.my_codes import (    build_gun_weapon_map,    load_candidates,    load_my_codes,    new_code_id,    parse_gun_code,    save_my_codes,)from ...core.theme import ThemeManagerfrom ..flow_layout import FlowLayoutfrom ..search_combo import SearchCombo# 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ...core.i18n import I18nManager
+from ...core.my_codes import (
+    build_gun_weapon_map,
+    load_candidates,
+    load_my_codes,
+    new_code_id,
+    parse_gun_code,
+    save_my_codes,
+)
+from ...core.theme import ThemeManager
+from ..flow_layout import FlowLayout
+from ..search_combo import SearchCombo
+
+# 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
 CARD_HEIGHT = 190
 MIN_CARD_WIDTH = 220
