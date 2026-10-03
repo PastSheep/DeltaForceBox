@@ -47,13 +47,21 @@ def load_manifest() -> list[PuzzleImage]:
 
 
 def pick_random_image(images: list[PuzzleImage] | None = None) -> PuzzleImage:
-    """洗牌后返回第一张可加载的图片（与网页端 loadFirstAvailable 一致）。"""
+    """洗牌后返回第一张可加载且可解码的图片（与网页端 loadFirstAvailable 一致）。
+
+    损坏文件（存在但无法解码，如用户放入垃圾字节的 png）会被跳过，
+    避免后续按零尺寸计算网格时除零崩溃；全部不可用时抛 FileNotFoundError。
+    """
     pool = images if images is not None else load_manifest()
     shuffled = list(pool)
     random.shuffle(shuffled)
     for img in shuffled:
-        if img.path.exists() and img.path.is_file():
-            return img
+        if not (img.path.exists() and img.path.is_file()):
+            continue
+        probe = QImage(str(img.path))
+        if probe.isNull() or probe.width() <= 0 or probe.height() <= 0:
+            continue  # 无法解码 / 零尺寸：跳过
+        return img
     raise FileNotFoundError(f"没有可用的拼图图片（目录：{PUZZLE_IMAGES_DIR}）")
 
 

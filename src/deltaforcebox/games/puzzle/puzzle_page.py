@@ -217,6 +217,8 @@ class PuzzlePage(QWidget):
         try:
             image = pick_random_image()
             img_w, img_h = self._image_size(image)
+            if img_w <= 0 or img_h <= 0:
+                raise ValueError(f"图片解码失败：{image.path}")
             # 与网页端一致：先归一化到高=100 的 viewBox 比例，再计算网格
             h_base = 100.0
             w_base = (img_w / img_h) * h_base
@@ -261,7 +263,7 @@ class PuzzlePage(QWidget):
                     self._pieces.append(piece)
                     self._scatter_piece(piece, c, r, cell_w, cell_h, knob_r, grid_w, grid_h)
 
-        except (FileNotFoundError, OSError) as exc:
+        except (FileNotFoundError, OSError, ValueError) as exc:
             self.author_label.setText(f"加载失败：{exc}")
             self.author_label.show()
 
