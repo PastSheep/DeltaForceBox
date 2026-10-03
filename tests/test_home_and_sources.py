@@ -7,7 +7,11 @@ from deltaforcebox.core.theme import ThemeManager
 from deltaforcebox.games.puzzle.image_source import load_manifest
 from deltaforcebox.games.puzzle.source_dialog import SourceCard, SourceDialog
 from deltaforcebox.widgets.main_window import MainWindow
-from deltaforcebox.widgets.pages.home_page import AUTHOR_EMAIL, AUTHOR_NAME
+from deltaforcebox.widgets.pages.home_page import (
+    AUTHOR_EMAIL,
+    AUTHOR_NAME,
+    UPDATE_AREA_HEIGHT,
+)
 
 
 def test_home_page_shows_author_info(qapp):
@@ -251,4 +255,8 @@ def test_home_shows_version_and_latest_update(qapp):
     assert home.update_body_label.isVisible()
     assert home.update_body_label.text() != ""
     assert __version__ in home.update_title_label.text()
+    # 最近更新正文限制在固定高度滚动区内（内容超出可滚动，不挤占首页）
+    assert home.update_scroll.isVisible()
+    assert home.update_scroll.height() == UPDATE_AREA_HEIGHT
+    assert home.update_scroll.widget() is home.update_body_host
     window.close()
