@@ -1,3 +1,3 @@
 """deltaforcebox 主包。"""
 
-__version__ = "Beta-5.1"
+__version__ = "Beta-5.2"
