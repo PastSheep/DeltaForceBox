@@ -73,6 +73,8 @@ def safe_int(
     - 供 app.py / updater.py 消费隐藏配置使用；用户手改 app_config.json
       为任意内容都不会导致程序无法启动。
     """
+    if isinstance(value, bool):
+        return default  # bool 是 int 子类，避免 True/False 被 int() 转成 1/0
     try:
         n = int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
