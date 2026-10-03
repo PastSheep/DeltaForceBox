@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtGui import QImage, QPixmap, QTransform
+from PySide6.QtGui import QImage, QImageReader, QPixmap, QTransform
 
 from ...core.paths import RESOURCES_DIR
 
@@ -58,9 +58,15 @@ def pick_random_image(images: list[PuzzleImage] | None = None) -> PuzzleImage:
     for img in shuffled:
         if not (img.path.exists() and img.path.is_file()):
             continue
-        probe = QImage(str(img.path))
-        if probe.isNull() or probe.width() <= 0 or probe.height() <= 0:
-            continue  # 无法解码 / 零尺寸：跳过
+        # 只读文件头部探测格式与尺寸（QImageReader.canRead/size 不触发全量解码），
+        # 平均只需探测 N/2 张的头部即可找到可用图，启动更快；
+        # 损坏文件（垃圾字节 png 等）canRead 为 False / 尺寸无效，直接跳过。
+        reader = QImageReader(str(img.path))
+        if not reader.canRead():
+            continue
+        size = reader.size()
+        if not size.isValid() or size.width() <= 0 or size.height() <= 0:
+            continue
         return img
     raise FileNotFoundError(f"没有可用的拼图图片（目录：{PUZZLE_IMAGES_DIR}）")
 
