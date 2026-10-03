@@ -91,6 +91,14 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", _TAG_RE.sub("", text)).strip()
 
 
+def _to_int(value: object, default: int = 0) -> int:
+    """宽容整数转换：非数字（字符串/None）回退默认值，不拖垮整条方案。"""
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 def decode_rsc(html: str) -> str:
     """提取并拼接 Next.js RSC payload（self.__next_f.push），返回流文本。
 
@@ -144,7 +152,7 @@ def _parse_solution_obj(obj: dict, gun_map: dict[int, tuple[str, str]]) -> GunSo
     if not isinstance(detail, dict) or not detail.get("nickname"):
         return None  # 仅保留主播推荐（带作者信息的方案）
     arms_id = obj.get("armsID") or obj.get("primaryArmsID") or 0
-    gun_name, weapon_type = gun_map.get(int(arms_id), ("", "")) if arms_id else ("", "")
+    gun_name, weapon_type = gun_map.get(_to_int(arms_id), ("", "")) if arms_id else ("", "")
     tags = [
         str(t.get("tagName", "")).strip() for t in obj.get("tagDetail") or [] if t.get("tagName")
     ]
@@ -157,12 +165,12 @@ def _parse_solution_obj(obj: dict, gun_map: dict[int, tuple[str, str]]) -> GunSo
     except (TypeError, ValueError):
         like_count = 0
     return GunSolution(
-        id=int(obj.get("id") or 0),
+        id=_to_int(obj.get("id")),
         name=str(obj.get("name", "") or ""),
         gun_name=gun_name or str(obj.get("armsDetail", {}).get("objectName", "") or ""),
         weapon_type=weapon_type or str(obj.get("armsDetail", {}).get("secondClassCN", "") or ""),
         author=str(detail.get("nickname", "") or ""),
-        author_id=int(obj.get("authorID") or 0),
+        author_id=_to_int(obj.get("authorID")),
         channel=str(detail.get("channel", "") or ""),
         author_avatar=str(detail.get("avatar", "") or ""),
         comment=_strip_html(str(obj.get("authorComment", "") or "")),
@@ -200,7 +208,7 @@ def parse_blob(blob: str) -> list[GunSolution]:
         except ValueError:
             continue
         if g.get("objectID") and g.get("secondClassCN"):
-            gun_map[int(g["objectID"])] = (
+            gun_map[_to_int(g["objectID"])] = (
                 str(g.get("objectName", "")), str(g.get("secondClassCN", ""))
             )
 
@@ -429,9 +437,20 @@ def preview_image_path(solution_id: int, path: Path | None = None) -> Path:
     return image_dir(path) / f"solution_{solution_id}.png"
 
 
+# 头像文件名安全化：昵称可能含 Windows 非法字符（* ? | " < > : / \）
+# 或尾随点，直接作文件名会写盘失败/落子目录；统一替换为下划线。
+_INVALID_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _safe_filename(text: str) -> str:
+    """把任意昵称转成合法的单段文件名（非法字符替换为 _，去尾随点/空白）。"""
+    cleaned = _INVALID_FILENAME_RE.sub("_", text or "").strip().rstrip(".")
+    return cleaned or "unknown"
+
+
 def avatar_image_path(author: str, path: Path | None = None) -> Path:
-    """作者头像本地路径（按主播昵称缓存）。"""
-    return image_dir(path) / f"avatar_{author}.png"
+    """作者头像本地路径（按主播昵称缓存，非法字符已安全化）。"""
+    return image_dir(path) / f"avatar_{_safe_filename(author)}.png"
 
 
 def ensure_image(
