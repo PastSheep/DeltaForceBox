@@ -9,39 +9,7 @@
 - 持久化：data/my_gun_codes.json（缺失/损坏回退空列表）。
 """
 
-from __future__ import annotations
-
-import time
-from pathlib import Path
-
-from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtWidgets import (
-    QApplication,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
-
-from ...core.i18n import I18nManager
-from ...core.my_codes import (
-    build_gun_weapon_map,
-    load_candidates,
-    load_my_codes,
-    new_code_id,
-    parse_gun_code,
-    save_my_codes,
-)
-from ...core.theme import ThemeManager
-from ..flow_layout import FlowLayout
-from ..search_combo import SearchCombo
-
-# 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
+from __future__ import annotationsimport timefrom pathlib import Pathfrom PySide6.QtCore import QEvent, Qt, QTimerfrom PySide6.QtWidgets import (    QApplication,    QFrame,    QHBoxLayout,    QLabel,    QLineEdit,    QMessageBox,    QPushButton,    QScrollArea,    QVBoxLayout,    QWidget,)from ...core.i18n import I18nManagerfrom ...core.my_codes import (    build_gun_weapon_map,    load_candidates,    load_my_codes,    new_code_id,    parse_gun_code,    save_my_codes,)from ...core.theme import ThemeManagerfrom ..flow_layout import FlowLayoutfrom ..search_combo import SearchCombo# 卡片与网格（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
 CARD_HEIGHT = 190
 MIN_CARD_WIDTH = 220
@@ -458,11 +426,19 @@ class MyCodesPage(QWidget):
         }
 
     def _render(self) -> None:
+        # 立即删除 C++ 对象（而非 deleteLater）：与主播推荐页 _clear_cards 一致，
+        # deleteLater 在退出时才处理 DeferredDelete，若 Python 包装器仍被引用会
+        # 触发双重删除崩溃（Qt Python 绑定经典问题，见 docs/踩坑记录.md）
         while self._flow.count():
             item = self._flow.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                widget.deleteLater()
+                try:
+                    from shiboken6 import delete as _qt_delete
+                except ImportError:
+                    widget.deleteLater()
+                else:
+                    _qt_delete(widget)
         self._cards = []
         filtered = self._filtered_records()
         for record in filtered:
