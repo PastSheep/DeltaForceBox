@@ -129,13 +129,19 @@ def fetch_password(
     order: tuple[str, ...] = DEFAULT_SOURCE_ORDER,
     timeout: int = FETCH_TIMEOUT,
     fetchers: dict[str, object] | None = None,
+    should_stop: object | None = None,
 ) -> DailyPasswordData | None:
     """按优先级顺序尝试各数据源，返回首个成功结果；全部失败返回 None。
 
     fetchers 参数供测试注入 mock，替换真实网络调用。
+    should_stop：可选无参回调（如 QThread.isInterruptionRequested），
+    每次尝试前检查；返回真值则立即中止并返回 None（用于窗口关闭时
+    快速收尾后台线程）。
     """
     table = fetchers if fetchers is not None else PASSWORD_FETCHERS
     for name in order:
+        if should_stop is not None and should_stop():
+            return None
         fetcher = table.get(name)
         if fetcher is None:
             continue
@@ -201,8 +207,11 @@ def cache_is_today(update_date: str, now: datetime | None = None) -> bool:
 def normalize_source_order(order: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
     """清洗来源顺序配置：只保留已知数据源、去重、保底默认顺序。
 
-    用于 settings.json 中用户手改的顺序（非法值/未知源被过滤）。
+    用于 settings.json 中用户手改的顺序（非法值/未知源被过滤）；
+    非列表/元组类型（如手改成整数）视为非法，回退默认顺序。
     """
+    if not isinstance(order, (list, tuple)):
+        return tuple(DEFAULT_SOURCE_ORDER)
     known = list(PASSWORD_FETCHERS)
     cleaned: list[str] = []
     for name in order or []:

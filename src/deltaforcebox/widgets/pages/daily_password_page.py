@@ -118,7 +118,10 @@ class _FetchWorker(QThread):
     def run(self) -> None:
         try:
             data = fetch_password(
-                self._order, timeout=self._timeout, fetchers=self._fetchers
+                self._order,
+                timeout=self._timeout,
+                fetchers=self._fetchers,
+                should_stop=self.isInterruptionRequested,
             )
         except Exception as exc:  # noqa: BLE001 - 线程边界，失败统一走 fail 信号
             self.fail.emit(str(exc))
@@ -622,6 +625,16 @@ class DailyPasswordPage(QWidget):
         self._worker.fail.connect(self._on_fetch_fail)
         self._worker.finished.connect(self._on_worker_finished)
         self._worker.start()
+
+    def _shutdown(self) -> None:
+        """请求后台拉取线程停止并等待，避免 QThread 运行时被回收（窗口关闭时调用）。
+
+        由 MainWindow.closeEvent 统一遍历页面调用（getattr 兜底）；
+        fetch_password 支持 should_stop，中断请求后线程快速退出。
+        """
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._worker.wait(2000)
 
     def _on_fetch_ok(self, data: DailyPasswordData) -> None:
         save_cache(data, self._cache_file)
