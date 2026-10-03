@@ -6,8 +6,10 @@ import html
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +24,8 @@ AUTHOR_NAME = "PastSheep"
 AUTHOR_EMAIL = "wzylscszyzh@163.com"
 # 链接色：取明暗主题都可读的中性蓝
 LINK_COLOR = "#4d8ff7"
+# 「最近更新」区域固定高度：超出部分滚动查看，避免挤占首页其余内容
+UPDATE_AREA_HEIGHT = 150
 
 
 class HomePage(QWidget):
@@ -67,10 +71,24 @@ class HomePage(QWidget):
         self.update_title_label = QLabel()
         self.update_title_label.setObjectName("pageTitle")
 
+        # 「最近更新」正文放入固定高度滚动区：内容超出时滚动查看
+        # （滚动条样式走 QSS 全局 QScrollBar 规则，双主题自动适配）
+        self.update_scroll = QScrollArea()
+        self.update_scroll.setObjectName("homeUpdateScroll")
+        self.update_scroll.setWidgetResizable(True)
+        self.update_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.update_scroll.setFixedHeight(UPDATE_AREA_HEIGHT)
+        self.update_body_host = QWidget()
+        host_box = QVBoxLayout(self.update_body_host)
+        host_box.setContentsMargins(0, 0, 0, 0)
+        host_box.setSpacing(0)
         self.update_body_label = QLabel()
         self.update_body_label.setObjectName("hint")
         self.update_body_label.setWordWrap(True)
         self.update_body_label.setTextFormat(Qt.TextFormat.RichText)
+        host_box.addWidget(self.update_body_label)
+        host_box.addStretch(1)
+        self.update_scroll.setWidget(self.update_body_host)
 
         top_row.addWidget(self.welcome_label, 1)
         top_row.addWidget(self.notice_bar, 0, Qt.AlignTop)
@@ -83,7 +101,7 @@ class HomePage(QWidget):
         layout.addWidget(self.email_label)
         layout.addSpacing(12)
         layout.addWidget(self.update_title_label)
-        layout.addWidget(self.update_body_label)
+        layout.addWidget(self.update_scroll)
         layout.addStretch(1)
 
     def retranslate(self) -> None:
@@ -103,7 +121,7 @@ class HomePage(QWidget):
         update = load_latest_update()
         if update is None:
             self.update_title_label.hide()
-            self.update_body_label.hide()
+            self.update_scroll.hide()
             return
         self.update_title_label.setText(
             f"{self._i18n.t('home.latest_update')}（{update['version']}）"
@@ -118,4 +136,4 @@ class HomePage(QWidget):
                 parts.append(f"· {html.escape(item)}")
         self.update_body_label.setText("<br>".join(parts))
         self.update_title_label.show()
-        self.update_body_label.show()
+        self.update_scroll.show()

@@ -233,6 +233,13 @@ QScrollArea#pwdDescScroll {
 QScrollArea#pwdDescScroll > QWidget > QWidget {
     background: transparent;
 }
+QScrollArea#homeUpdateScroll {
+    background: transparent;
+    border: none;
+}
+QScrollArea#homeUpdateScroll > QWidget > QWidget {
+    background: transparent;
+}
 
 /* Scrollbar */
 QScrollBar:vertical {
