@@ -14,40 +14,34 @@
 线程边界：网络请求全部在 QThread 后台执行，UI 只在主线程更新。
 """
 
-from __future__ import annotations
-
-import math
-from datetime import datetime, timedelta
-from pathlib import Path
-
-from PySide6.QtCore import QEvent, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QPixmap, QPixmapCache
-from PySide6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
+from __future__ import annotationsimport mathfrom datetime import datetime, timedeltafrom pathlib import Pathfrom PySide6.QtCore import QEvent, Qt, QThread, QTimer, Signalfrom PySide6.QtGui import QPixmap, QPixmapCachefrom PySide6.QtWidgets import (    QApplication,    QComboBox,    QFrame,    QHBoxLayout,    QLabel,    QPushButton,    QScrollArea,    QVBoxLayout,    QWidget,)from ...core.gun_solutions import (    GunSolution,    avatar_image_path,    cache_is_fresh,    ensure_image,    load_guns_cache,    preview_image_path,    save_guns_cache,    sync_official_solutions,)from ...core.i18n import I18nManagerfrom ...core.theme import ThemeManagerfrom ..flow_layout import FlowLayoutfrom ..search_combo import SearchCombo# GunSolution 反序列化字段白名单：只取已知展示字段，旧缓存多/缺字段
+# 不会导致 TypeError 整页空白
+_SOLUTION_FIELDS = (
+    "id",
+    "name",
+    "gun_name",
+    "weapon_type",
+    "author",
+    "author_id",
+    "channel",
+    "author_avatar",
+    "comment",
+    "tags",
+    "solution_code",
+    "price",
+    "preview_pic",
+    "updated_at",
+    "like_count",
 )
 
-from ...core.gun_solutions import (
-    GunSolution,
-    avatar_image_path,
-    cache_is_fresh,
-    ensure_image,
-    load_guns_cache,
-    preview_image_path,
-    save_guns_cache,
-    sync_official_solutions,
-)
-from ...core.i18n import I18nManager
-from ...core.theme import ThemeManager
-from ..flow_layout import FlowLayout
-from ..search_combo import SearchCombo
+
+def _solution_from_dict(s: dict) -> GunSolution | None:
+    """白名单构造 GunSolution；字段/类型异常时返回 None（只跳过该条）。"""
+    try:
+        return GunSolution(**{k: s[k] for k in _SOLUTION_FIELDS if k in s})
+    except (TypeError, ValueError):
+        return None
+
 
 # 卡片尺寸与网格间距（宽度随视口自适应伸缩，高度固定保证等高）
 CARD_WIDTH = 260
@@ -366,6 +360,10 @@ class GunCodePage(QWidget):
         self._image_opener = image_opener
         self._sync_worker: _SyncWorker | None = None
         self._image_worker: _ImageWorker | None = None
+        # 图片下载串行化：上一轮 worker 运行中到达的新任务并入待办，
+        # 结束后再启动，避免多个 worker 并发下载同一文件到同一 .tmp 路径
+        self._pending_image_jobs: list[tuple[str, Path]] = []
+        self._closing = False  # _shutdown 后禁止再启动新 worker
         self._fetching = False
         self._has_content = False
         self._throttle_until: datetime | None = None
@@ -511,14 +509,21 @@ class GunCodePage(QWidget):
     # ── 数据与筛选 ──────────────────────────────────
 
     def _apply_cache(self) -> None:
-        """读取缓存并渲染（离线优先展示）。"""
+        """读取缓存并渲染（离线优先展示）。
+
+        反序列化按字段白名单逐条构造：旧版本缓存多/缺字段或类型异常
+        只跳过该条，不拖垮整页（GunSolution(**s) 单条 TypeError 会 return 空白页）。
+        """
         data = load_guns_cache(self._cache_file)
         if data is None:
             return
-        try:
-            solutions = [GunSolution(**s) for s in data.get("solutions", [])]
-        except TypeError:
-            return
+        solutions: list[GunSolution] = []
+        for s in data.get("solutions", []):
+            if not isinstance(s, dict):
+                continue
+            item = _solution_from_dict(s)
+            if item is not None and item.id:
+                solutions.append(item)
         if not solutions:
             return
         self._set_solutions(solutions, stale=True)
@@ -735,7 +740,11 @@ class GunCodePage(QWidget):
             card.set_avatar(pm)
 
     def _ensure_images(self) -> None:
-        """后台补齐缺失的预览图/头像（已存在跳过，失败静默）。"""
+        """后台补齐缺失的预览图/头像（已存在跳过，失败静默）。
+
+        串行化：当前下载 worker 仍在运行时不另起线程，任务并入待办，
+        结束后统一再启动（避免并发写同一 .tmp 路径导致缓存损坏）。
+        """
         jobs: list[tuple[str, Path]] = []
         for card in self._cards:
             s = card.solution
@@ -749,9 +758,18 @@ class GunCodePage(QWidget):
                     jobs.append((s.author_avatar, dest))
         if not jobs:
             return
+        if self._image_worker is not None and self._image_worker.isRunning():
+            self._pending_image_jobs.extend(jobs)
+            return
+        self._start_image_worker(jobs)
+
+    def _start_image_worker(self, jobs: list[tuple[str, Path]]) -> None:
         self._image_worker = _ImageWorker(jobs, self._image_opener)
         self._image_worker.done.connect(self._on_images_ready)
-        self._image_worker.finished.connect(self._on_image_worker_finished)
+        worker = self._image_worker
+        self._image_worker.finished.connect(
+            lambda w=worker: self._on_image_worker_finished(w)
+        )
         _track_worker(self._image_worker)
         self._image_worker.start()
 
@@ -759,11 +777,17 @@ class GunCodePage(QWidget):
         for card in self._cards:
             self._apply_local_images(card)
 
-    def _on_image_worker_finished(self) -> None:
+    def _on_image_worker_finished(self, worker: object) -> None:
+        if self._image_worker is not worker:
+            return  # 旧 worker 的 finished 不覆盖新引用（防 _shutdown 漏掉）
         self._image_worker = None
+        if not self._closing and self._pending_image_jobs:
+            jobs, self._pending_image_jobs = self._pending_image_jobs, []
+            self._start_image_worker(jobs)
 
     def _shutdown(self) -> None:
         """请求后台线程停止并等待，避免 QThread 运行时被回收（窗口关闭时调用）。"""
+        self._closing = True
         for worker in (self._sync_worker, self._image_worker):
             if worker is not None and worker.isRunning():
                 worker.requestInterruption()
