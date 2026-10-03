@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.gun_solutions import (
+    FETCH_TIMEOUT,
     GunSolution,
     _to_int,
     avatar_image_path,
@@ -830,12 +831,18 @@ class GunCodePage(QWidget):
             self._start_image_worker(jobs)
 
     def _shutdown(self) -> None:
-        """请求后台线程停止并等待，避免 QThread 运行时被回收（窗口关闭时调用）。"""
+        """请求后台线程停止并等待，避免 QThread 运行时被回收（窗口关闭时调用）。
+
+        wait 上限取 FETCH_TIMEOUT + 余量：requestInterruption 后线程最多完成
+        当前请求（≤FETCH_TIMEOUT=15s）即退出；正常情况 worker 早已结束，
+        wait 立即返回。与 _ACTIVE_WORKERS 注册表组合，杜绝进程退出时
+        running QThread 被析构导致的 0xC0000409 硬崩溃。
+        """
         self._closing = True
         for worker in (self._sync_worker, self._image_worker):
             if worker is not None and worker.isRunning():
                 worker.requestInterruption()
-                worker.wait(2000)
+                worker.wait(FETCH_TIMEOUT * 1000 + 2000)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         self._shutdown()
