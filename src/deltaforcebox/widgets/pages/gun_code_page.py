@@ -14,7 +14,43 @@
 线程边界：网络请求全部在 QThread 后台执行，UI 只在主线程更新。
 """
 
-from __future__ import annotationsimport mathfrom datetime import datetime, timedeltafrom pathlib import Pathfrom PySide6.QtCore import QEvent, Qt, QThread, QTimer, Signalfrom PySide6.QtGui import QPixmap, QPixmapCachefrom PySide6.QtWidgets import (    QApplication,    QComboBox,    QFrame,    QHBoxLayout,    QLabel,    QPushButton,    QScrollArea,    QVBoxLayout,    QWidget,)from ...core.gun_solutions import (    GunSolution,    avatar_image_path,    cache_is_fresh,    ensure_image,    load_guns_cache,    preview_image_path,    save_guns_cache,    sync_official_solutions,)from ...core.i18n import I18nManagerfrom ...core.theme import ThemeManagerfrom ..flow_layout import FlowLayoutfrom ..search_combo import SearchCombo# GunSolution 反序列化字段白名单：只取已知展示字段，旧缓存多/缺字段
+from __future__ import annotations
+
+import math
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QPixmap, QPixmapCache
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ...core.gun_solutions import (
+    GunSolution,
+    _to_int,
+    avatar_image_path,
+    cache_is_fresh,
+    ensure_image,
+    load_guns_cache,
+    preview_image_path,
+    save_guns_cache,
+    sync_official_solutions,
+)
+from ...core.i18n import I18nManager
+from ...core.theme import ThemeManager
+from ..flow_layout import FlowLayout
+from ..search_combo import SearchCombo
+
+# GunSolution 反序列化字段白名单：只取已知展示字段，旧缓存多/缺字段
 # 不会导致 TypeError 整页空白
 _SOLUTION_FIELDS = (
     "id",
@@ -38,7 +74,15 @@ _SOLUTION_FIELDS = (
 def _solution_from_dict(s: dict) -> GunSolution | None:
     """白名单构造 GunSolution；字段/类型异常时返回 None（只跳过该条）。"""
     try:
-        return GunSolution(**{k: s[k] for k in _SOLUTION_FIELDS if k in s})
+        vals = {k: s[k] for k in _SOLUTION_FIELDS if k in s}
+        # id 必须可解析为正整数：缺失/非法直接跳过该条
+        # （避免 id="x" 之类生成 solution_x.png 异常缓存文件名）
+        sid = _to_int(vals.get("id"), 0)
+        if sid <= 0:
+            return None
+        vals["id"] = sid
+        vals["author_id"] = _to_int(vals.get("author_id"), 0)
+        return GunSolution(**vals)
     except (TypeError, ValueError):
         return None
 
